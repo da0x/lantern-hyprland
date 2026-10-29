@@ -105,7 +105,9 @@ because a dead connection otherwise looks exactly like a quiet compositor.
 - **GPL-3.0-or-later.** Every source, header, CMake and script file starts with
   `SPDX-License-Identifier: GPL-3.0-or-later` in a comment, and CI checks it. Code from
   elsewhere comes in only under a GPL-compatible license, with its own notice kept
-  (Hyprland's example config and stubs, for instance, are BSD-3-Clause).
+  (Hyprland's example config and stubs, for instance, are BSD-3-Clause). The one exception
+  is `packaging/arch/PKGBUILD`, which is 0BSD because the AUR takes PKGBUILDs only under
+  that license, so the same file can go there unchanged.
 - **Packageable as is.** A distribution, Arch Linux first, must be able to package any
   release with no patches. So the build respects the packager's flags: it works with
   `CMAKE_BUILD_TYPE=None`, adds no `-O` or `-march` of its own, and turns warnings into

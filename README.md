@@ -339,6 +339,21 @@ and saving it to your config, keeping an activation across restarts (opt-in), dr
 displays into place, keybinding and window-rule editors, an animation and bezier editor,
 and writing the older `hyprland.conf` format.
 
+## Installing
+
+On Arch Linux, build the package from the recipe in `packaging/arch`:
+
+```
+git clone https://github.com/da0x/lantern-hyprland
+cd lantern-hyprland/packaging/arch
+makepkg -si
+```
+
+It builds the release from its tagged source, checked against a pinned checksum, and
+installs it with pacman, so `sudo pacman -R lantern-hyprland` removes it again. Lantern
+will be on the AUR once the AUR takes new accounts again. On other distributions, build it
+from source as below.
+
 ## Building
 
 Lantern is written in C++26 on [hyprtoolkit](https://github.com/hyprwm/hyprtoolkit),

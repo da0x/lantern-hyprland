@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: 0BSD
+# Maintainer: Daher Alfawares <3171199+da0x@users.noreply.github.com>
+
+pkgname=lantern-hyprland
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Understand and configure Hyprland, and leave nothing behind'
+arch=('x86_64')
+url='https://github.com/da0x/lantern-hyprland'
+license=('GPL-3.0-or-later')
+depends=('hyprtoolkit' 'lua' 'tree-sitter' 'tree-sitter-lua' 'fontconfig' 'systemd-libs' 'libgcc' 'libstdc++' 'glibc')
+makedepends=('cmake' 'ninja' 'nlohmann-json')
+checkdepends=('gtest' 'desktop-file-utils' 'appstream')
+optdepends=('hyprland: the compositor Lantern configures'
+            'waybar: the status bar the Bar page configures'
+            'hyprpicker: picking theme colors from the screen')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('75549757af8bfb205a8054ab283fd8d9c36a5ec426f034e3376a3bddb706ec83')
+
+build() {
+  cmake -S "$pkgname-$pkgver" -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=None \
+    -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build build
+}
+
+check() {
+  ctest --test-dir build --output-on-failure
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+}
