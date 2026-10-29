@@ -375,13 +375,6 @@ sudo make uninstall   # remove what make install put there
 
 `make install PREFIX=~/.local` installs for your user only, without `sudo`.
 
-With hyprtoolkit 0.6.0, the current release, Lantern may crash now and then, and after you
-make the text smaller, the sidebar can keep its old width until the window is resized. To
-stay clear of the crash, the theme and wallpaper cards move a row at a time with the mouse
-wheel instead of scrolling smoothly. Fixes have been submitted to hyprtoolkit and will be
-in a future release. To build against a hyprtoolkit that already has them, install it
-somewhere of its own and point Lantern at it: `make HYPRTOOLKIT_PREFIX=/where/it/is/installed`.
-
 `make install` builds nothing itself, so run `make` as yourself first. Packagers can use CMake directly:
 the build takes the usual `CMAKE_BUILD_TYPE`, `CMAKE_INSTALL_PREFIX` and `DESTDIR`.
 
