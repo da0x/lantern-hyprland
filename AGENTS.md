@@ -164,3 +164,6 @@ before committing a screenshot, look at it for window titles, names and hardware
 - `docs/research.md`: what we know about Hyprland's config formats and IPC, and what is
   still open. Read it before touching the configuration or IPC code.
 - `docs/upstream.md`: gaps in Hyprland's IPC, and how Lantern works around them.
+- Bugs and known issues: [GitHub issues](https://github.com/da0x/lantern-hyprland/issues),
+  one ticket each, never text in the README. A bug written into a document outlives its
+  fix; a ticket gets closed.
