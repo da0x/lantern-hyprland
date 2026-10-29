@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>lantern-hyprland</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <name>Lantern for Hyprland</name>
+  <summary>Understand and configure Hyprland, and leave nothing behind</summary>
+  <developer id="io.github.da0x">
+    <name>Daher Alfawares</name>
+  </developer>
+
+  <description>
+    <p>
+      Lantern for Hyprland is a settings app for Hyprland that makes your desktop easier
+      to see, read and use, and then gets out of the way.
+    </p>
+    <ul>
+      <li>Accessibility first: larger text, higher contrast, colors corrected for color
+        blindness, calmer animations and an easier cursor, across the whole desktop.</li>
+      <li>It never takes over: it installs nothing, runs nothing with sudo, shows every
+        change as a diff before writing it, and undoes it in one click.</li>
+      <li>One look everywhere: a theme changes window borders, Waybar, the launcher,
+        notifications and GTK apps together.</li>
+      <li>It shows what Hyprland is doing: every option with its documentation, every
+        keybinding and where it is set, a live map of monitors and windows, and an event
+        log.</li>
+    </ul>
+    <p>
+      What it writes is plain Hyprland, Waybar and GTK configuration, with nothing of its
+      own, so your desktop works the same if you stop using it.
+    </p>
+    <p>
+      Lantern for Hyprland is an independent project. It is not affiliated with or
+      endorsed by the Hyprland project.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">lantern-hyprland.desktop</launchable>
+  <provides>
+    <binary>lantern-hyprland</binary>
+  </provides>
+
+  <url type="homepage">https://github.com/da0x/lantern-hyprland</url>
+  <url type="bugtracker">https://github.com/da0x/lantern-hyprland/issues</url>
+  <url type="vcs-browser">https://github.com/da0x/lantern-hyprland</url>
+
+  <categories>
+    <category>Settings</category>
+    <category>DesktopSettings</category>
+  </categories>
+  <keywords>
+    <keyword>hyprland</keyword>
+    <keyword>wayland</keyword>
+    <keyword>settings</keyword>
+    <keyword>accessibility</keyword>
+    <keyword>theme</keyword>
+    <keyword>keybindings</keyword>
+  </keywords>
+
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>One palette for the whole desktop</caption>
+      <image>https://raw.githubusercontent.com/da0x/lantern-hyprland/main/docs/screenshots/theme.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Contrast, text size, color vision, cursor size and motion</caption>
+      <image>https://raw.githubusercontent.com/da0x/lantern-hyprland/main/docs/screenshots/accessibility.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Every keybinding, what it does and where it is set</caption>
+      <image>https://raw.githubusercontent.com/da0x/lantern-hyprland/main/docs/screenshots/keyboard-shortcuts.png</image>
+    </screenshot>
+  </screenshots>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="0.1.0" date="2026-10-28"/>
+  </releases>
+</component>

@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Reads lines of "where:text" on standard input and fails if any of them names this
+# machine or its owner. What to look for is read from the machine itself, every time, so
+# nothing personal is ever written into the repository to compare against.
+
+set -u
+
+terms=$(mktemp)
+trap 'rm -f "$terms"' EXIT
+
+add() {
+    local term
+    term=$(printf '%s' "$1" | tr -s ' ' | sed 's/^ //; s/ $//')
+    if [ ${#term} -ge 4 ]; then printf '%s\n' "$term" >> "$terms"; fi
+}
+
+add "$HOME"
+add "$(cat /etc/machine-id 2>/dev/null)"
+
+# A distribution's default hostname is in every screenshot and sample, so only a chosen one counts.
+host=$(cat /etc/hostname 2>/dev/null || true)
+case $host in
+    localhost | archlinux | fedora | debian | ubuntu | nixos | gentoo | void | "") ;;
+    *) add "$host" ;;
+esac
+
+while read -r email; do
+    case $email in
+        *noreply*) ;;
+        *) add "$email" ;;
+    esac
+done < <(git config --get-all user.email 2>/dev/null; git config --global --get-all user.email 2>/dev/null)
+
+# The model and serial of each display; the maker alone names no one.
+if command -v hyprctl >/dev/null && command -v jq >/dev/null; then
+    while read -r value; do add "$value"; done < <(hyprctl monitors all -j 2>/dev/null | jq -r '.[] | .model, .serial' 2>/dev/null)
+fi
+
+# The model of each graphics card, but not its maker.
+if command -v lspci >/dev/null; then
+    while read -r value; do
+        case $value in
+            */* | AMD | Intel* | NVIDIA*) ;;
+            *) add "$value" ;;
+        esac
+    done < <(lspci 2>/dev/null | grep -E 'VGA|3D|Display' | grep -oP '\[\K[^]]+(?=\])')
+fi
+
+if command -v nmcli >/dev/null; then
+    while read -r value; do
+        case $value in
+            "Wired connection"* | lo | docker* | virbr* | br-* | veth* | tun* | tap* | wg*) ;;
+            *) add "$value" ;;
+        esac
+    done < <(nmcli -t -f NAME connection show 2>/dev/null)
+fi
+
+if command -v bluetoothctl >/dev/null; then
+    while read -r value; do add "$value"; done < <(bluetoothctl devices 2>/dev/null | cut -d' ' -f3-)
+fi
+
+input=$(cat)
+found=0
+
+if [ -s "$terms" ]; then
+    while IFS= read -r term; do
+        while IFS= read -r line; do
+            printf 'check-leaks: %s\n    names this machine or its owner: "%s"\n' "${line%%: *}" "$term" >&2
+            found=1
+        done < <(printf '%s\n' "$input" | grep -F -i -- "$term")
+    done < "$terms"
+fi
+
+# Any other home folder or an assistant's scratch folder, whoever's machine it came from.
+# Examples use /home/me.
+while IFS= read -r line; do
+    printf 'check-leaks: %s\n    names a real home or scratch folder; examples use /home/me\n' "${line%%: *}" >&2
+    found=1
+done < <(printf '%s\n' "$input" | grep -E '/home/[A-Za-z0-9._-]+|/tmp/claude-|/\.claude/' | grep -vE '/home/(me|user|you)([^A-Za-z0-9._-]|$)')
+
+if [ $found -ne 0 ]; then
+    printf '\nUse made-up names, paths and hardware instead. See "No personal data" in AGENTS.md.\n' >&2
+fi
+exit $found

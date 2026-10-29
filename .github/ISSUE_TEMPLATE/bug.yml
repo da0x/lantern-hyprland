@@ -1,0 +1,24 @@
+name: Bug
+description: Something Lantern did wrong, or did not do.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup
+      description: Distribution, the first line of `hyprctl version`, the hyprtoolkit version, Lua or .conf config, the graphics maker and driver (the exact card is not needed), and Lantern's version.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Start Lantern with `lantern-hyprland --verbose` and paste what it prints around the problem. After a crash, `coredumpctl info lantern-hyprland` shows where it happened. Check both for anything private before you paste.
+      render: text

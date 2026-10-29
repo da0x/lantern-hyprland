@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Points git at this repository's hooks. Git runs nothing on clone, so each clone runs
+# this once.
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+git config core.hooksPath .githooks
+echo "Git now runs the hooks in .githooks for this clone."

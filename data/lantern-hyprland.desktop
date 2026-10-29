@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Lantern for Hyprland
+GenericName=Hyprland settings
+Comment=Understand and configure Hyprland, and leave nothing behind
+Exec=lantern-hyprland
+Icon=lantern-hyprland
+Terminal=false
+Categories=Settings;DesktopSettings;
+Keywords=settings;preferences;appearance;hyprland;wayland;theme;wallpaper;windows;gaps;corners;bar;waybar;terminal;font;accessibility;contrast;cursor;keybindings;shortcuts;

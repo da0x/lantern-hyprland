@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Made by CMake from toolkit.hpp.in.
+#pragma once
+
+namespace ui {
+
+    // Built against a hyprtoolkit whose scroll area keeps the repositions it schedules
+    // during a layout pass (LANTERN_HYPRLAND_FIXED_HYPRTOOLKIT). hyprtoolkit 0.6.0's scroll
+    // area crashes the app, so without it Lantern pages its cards with the wheel instead.
+    inline constexpr bool scrollAreaWorks = @LANTERN_HYPRLAND_FIXED_HYPRTOOLKIT_VALUE@;
+
+}

@@ -1,0 +1,11 @@
+name: Idea
+description: Something Lantern could do, or do better.
+labels: ["idea"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What you want to do, and what gets in the way today. The problem matters more than a solution.
+    validations:
+      required: true

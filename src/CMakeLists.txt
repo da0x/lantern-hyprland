@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+add_subdirectory(foundation)
+add_subdirectory(lua)
+add_subdirectory(syntax)
+add_subdirectory(configuration)
+add_subdirectory(desktop)
+add_subdirectory(ipc)
+add_subdirectory(application)
+add_subdirectory(activation)
+add_subdirectory(ui)
+
+add_executable(lantern-hyprland main.cpp)
+target_link_libraries(lantern-hyprland PRIVATE lantern-hyprland-ui)
+install(TARGETS lantern-hyprland RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES ${PROJECT_SOURCE_DIR}/data/lantern-hyprland.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES ${PROJECT_SOURCE_DIR}/data/lantern-hyprland.metainfo.xml DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
+install(FILES ${PROJECT_SOURCE_DIR}/data/lantern-hyprland.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)

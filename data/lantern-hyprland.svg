@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="glow" cx="64" cy="74" r="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff4d6"/>
+      <stop offset="0.3" stop-color="#ffd27a"/>
+      <stop offset="1" stop-color="#f08a24"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="64" cy="74" r="62" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffc35c" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#ffc35c" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4f5768"/>
+      <stop offset="0.5" stop-color="#7a8396"/>
+      <stop offset="1" stop-color="#454c5c"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="74" r="62" fill="url(#halo)"/>
+  <path d="M48 26 a16 16 0 0 1 32 0" fill="none" stroke="#5a6274" stroke-width="8" stroke-linecap="round"/>
+  <path d="M28 42 L42 24 H86 L100 42 Z" fill="url(#metal)"/>
+  <rect x="22" y="38" width="84" height="12" rx="5" fill="url(#metal)"/>
+  <rect x="30" y="50" width="68" height="54" rx="4" fill="url(#glow)"/>
+  <path d="M64 58 C76 70 76 86 64 96 C52 86 52 70 64 58 Z" fill="#fffaf0"/>
+  <rect x="30" y="50" width="68" height="54" rx="4" fill="none" stroke="#4f5768" stroke-width="7"/>
+  <rect x="22" y="100" width="84" height="14" rx="5" fill="url(#metal)"/>
+</svg>

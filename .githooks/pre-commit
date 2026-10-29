@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Checks the lines this commit adds, as staged, for anything naming this machine or its
+# owner, except in check-leaks, which has to name what it looks for. Images cannot be read
+# this way, so it asks for them to be looked at instead.
+
+hooks=$(dirname "$0")
+
+git diff --cached --no-color -U0 --diff-filter=ACMR |
+    awk '/^\+\+\+ b\// { file = substr($0, 7) }
+         /^@@/ { split($3, at, ","); line = substr(at[1], 2) }
+         /^\+/ && !/^\+\+\+/ && file != ".githooks/check-leaks" { print file ":" line ": " substr($0, 2); line++ }' |
+    "$hooks/check-leaks" || exit 1
+
+images=$(git diff --cached --name-only --diff-filter=AM | grep -iE '\.(png|jpe?g|gif|webp|svg)$')
+if [ -n "$images" ]; then
+    printf 'pre-commit: check these images by eye for window titles, names and hardware:\n%s\n' "$images" >&2
+fi
+exit 0

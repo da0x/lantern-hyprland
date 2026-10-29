@@ -1,0 +1,7 @@
+These terminal themes are kitty's color schemes, copied unchanged from kitty-themes,
+https://github.com/kovidgoyal/kitty-themes, which is distributed under the GNU General
+Public License, version 3. Each file names its theme, its author and its upstream; most
+also carry their theme's own license, MIT, in their header.
+
+Applying one writes the file as it is to kitty's current-theme.conf, as kitty's own
+"kitten themes" does.

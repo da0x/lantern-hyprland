@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Checks the commit message for anything naming this machine or its owner.
+
+grep -v '^#' "$1" | sed 's/^/commit message: /' | "$(dirname "$0")/check-leaks"

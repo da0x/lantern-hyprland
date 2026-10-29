@@ -1,0 +1,5 @@
+[
+ {"locked": false, "mouse": false, "release": false, "repeat": false, "longPress": false, "non_consuming": false, "auto_consuming": false, "has_description": false, "modmask": 64, "submap": "", "submap_universal": "false", "key": "Q", "keycode": 0, "catch_all": false, "description": "", "allow_input_capture": false, "dispatcher": "__lua", "arg": "3"},
+ {"locked": true, "mouse": false, "release": false, "repeat": true, "longPress": false, "non_consuming": false, "auto_consuming": false, "has_description": true, "modmask": 0, "submap": "", "submap_universal": "false", "key": "XF86AudioRaiseVolume", "keycode": 0, "catch_all": false, "description": "Raise the volume", "allow_input_capture": false, "dispatcher": "__lua", "arg": "4"},
+ {"locked": false, "mouse": true, "release": false, "repeat": false, "longPress": false, "non_consuming": false, "auto_consuming": false, "has_description": false, "modmask": 65, "submap": "resize", "submap_universal": "false", "key": "mouse:272", "keycode": 0, "catch_all": false, "description": "", "allow_input_capture": false, "dispatcher": "__lua", "arg": "5"}
+]

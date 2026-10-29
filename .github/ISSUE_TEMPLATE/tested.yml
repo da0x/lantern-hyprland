@@ -1,0 +1,78 @@
+name: Tested on
+description: Tell us the setup you ran Lantern on, and how it went. Each report keeps the README's table current.
+title: "Tested on: "
+labels: ["tested-on"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. A report helps even when everything worked, and especially when you are on a setup the README's table does not list yet.
+  - type: input
+    id: distribution
+    attributes:
+      label: Distribution
+      description: The name and version from /etc/os-release.
+      placeholder: Fedora 43
+    validations:
+      required: true
+  - type: input
+    id: hyprland
+    attributes:
+      label: Hyprland version
+      description: The first line of `hyprctl version`.
+      placeholder: Hyprland 0.56.2
+    validations:
+      required: true
+  - type: input
+    id: hyprtoolkit
+    attributes:
+      label: hyprtoolkit version
+      description: "`pkg-config --modversion hyprtoolkit`, or your package manager's version of it."
+      placeholder: 0.6.0
+    validations:
+      required: true
+  - type: dropdown
+    id: config
+    attributes:
+      label: Hyprland config
+      options:
+        - Lua (hyprland.lua)
+        - hyprlang (hyprland.conf)
+    validations:
+      required: true
+  - type: dropdown
+    id: graphics
+    attributes:
+      label: Graphics
+      description: The maker, and the driver Hyprland runs on. The exact card is not needed.
+      options:
+        - AMD, amdgpu with Mesa
+        - Intel, i915 or xe with Mesa
+        - NVIDIA, NVIDIA's own driver
+        - NVIDIA, nouveau or NVK with Mesa
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: lantern
+    attributes:
+      label: Lantern version
+      description: The release, or the commit if you built from source.
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: How it went
+      options:
+        - Everything I tried worked
+        - Most things worked
+        - It did not start, or was not usable
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What you tried, and what did not work
+      description: The pages you used, and anything that looked wrong. One issue per bug is easier to track, so link any you opened.
