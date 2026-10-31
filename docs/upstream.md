@@ -56,6 +56,24 @@ Fix, adding fields only:
 This is the change Lantern would gain most from, since without it every Lua user's
 keybindings have to be read by running their config.
 
+### `plugin list` leaves out each plugin's file, and no event reports a plugin
+
+The reply to `plugin list` gives a plugin's name, author, handle, version and
+description, but not the file it was loaded from, although `CPlugin` keeps it in
+`m_path` (`src/plugins/PluginSystem.hpp`). Unloading takes that path, and loading again
+needs it, so a client that did not load the plugin itself cannot turn it off. Lantern
+reads it from the process instead: Hyprland's ID from the lock file in the instance's
+folder, then the libraries it mapped from `/proc/<ID>/maps`, matched to plugins by file
+name (`src/ipc/plugins.cpp`). A plugin whose file name does not match its name is shown
+without a switch.
+
+Nothing on the event socket says that a plugin was loaded or unloaded, so the Plugins
+page asks again when it is opened and after its own On or Off, rather than staying
+current.
+
+Fix, adding only: a `path` field in the `plugin list` reply, and `pluginloaded` and
+`pluginunloaded` events carrying the name and path.
+
 ### `hyprctl -j` corrupts escaped semicolons in a batch
 
 The compositor now accepts `\;` inside a `[[BATCH]]` (`src/ipc/s1/S1.cpp:128-150`), so

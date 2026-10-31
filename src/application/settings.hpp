@@ -28,6 +28,9 @@ namespace application {
         // The areas the user allowed on the Activate page, by name: "options",
         // "keybindings", "programs", "theme". None until the user allows one.
         std::vector<std::string> activationAllowed;
+        // The files of the plugins Lantern turned off, so the Plugins page can turn them on
+        // again: Hyprland forgets a plugin once it is unloaded.
+        std::vector<std::string> pluginsTurnedOff;
     };
 
     // Missing or unreadable settings are the defaults.

@@ -31,7 +31,7 @@ below.
 | `ipc` | Instances, the read-only request allow-list, the request client, reply and event parsing, the event connection, the running instance's launch | foundation, configuration, nlohmann-json |
 | `compositor` | Monitors, workspaces and windows, built from a snapshot and kept current by events | ipc |
 | `activation` | The live layer: allowed areas, effects, applying and removing them, the theme restore record | ipc, configuration, GIO (GSettings) |
-| `application` | The session that ties it together: workers, results, merging recorded and live bindings, the option catalog, outside programs' On and Off, Lantern's own settings, running short commands, the desktop portal's file chooser (sd-bus) | all of the above |
+| `application` | The session that ties it together: workers, results, merging recorded and live bindings, the option catalog, outside programs' On and Off, the plugin list, Lantern's own settings, running short commands, the desktop portal's file chooser (sd-bus) | all of the above |
 | `ui` | Pages on hyprtoolkit: keybindings, bar, wallpaper, theme, options, live tree, event log, console, areas and Activate | application, desktop, hyprtoolkit |
 
 `foundation`, `lua` and `configuration` use no UI library; the build fails if one is

@@ -60,6 +60,10 @@ it on. Nothing is activated automatically, at startup or otherwise.
   Hyprland would, detached from Lantern. Neither changes what starts at login. After Lantern
   writes that program's files, it restarts the program so it reads them, but only
   while it is on, and if it then does not start, the files are put back.
+- A Hyprland plugin's On and Off switches, on the Plugins page, are the same kind of
+  exception: pressing one loads or unloads that plugin's file at once, and neither
+  changes what loads at login. The page says before anything is pressed that a plugin
+  runs inside Hyprland and can crash it.
 - The desktop theme lives in dconf, which is on disk, so before changing a value Lantern
   writes its previous value to the restore record. Deactivating, or the next start
   after a crash, puts every value back and deletes the record.

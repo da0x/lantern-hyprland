@@ -40,12 +40,17 @@ namespace application {
                 for (const auto& name : *allowed)
                     if (name.is_string())
                         settings.activationAllowed.push_back(name.get<std::string>());
+        if (const auto plugins = json.find("plugins"); plugins != json.end() && plugins->is_object())
+            if (const auto off = plugins->find("turnedOff"); off != plugins->end() && off->is_array())
+                for (const auto& file : *off)
+                    if (file.is_string())
+                        settings.pluginsTurnedOff.push_back(file.get<std::string>());
         return settings;
     }
 
     std::expected<void, std::string> saveSettings(const Settings& settings, const std::filesystem::path& lanternFolder) {
         auto json = readFile(lanternFolder);
-        for (const auto* page : {"bar", "wallpaper", "accessibility", "activation"})
+        for (const auto* page : {"bar", "wallpaper", "accessibility", "activation", "plugins"})
             if (!json[page].is_object())
                 json[page] = nlohmann::json::object();
         json["bar"]["requirementsDismissed"]       = settings.barRequirementsDismissed;
@@ -55,6 +60,7 @@ namespace application {
         json["accessibility"]["contrast"]          = settings.contrast;
         json["accessibility"]["vision"]            = settings.vision;
         json["activation"]["allowed"]              = settings.activationAllowed;
+        json["plugins"]["turnedOff"]               = settings.pluginsTurnedOff;
         return configuration::writeWhole(lanternFolder / "settings.json", json.dump(4) + "\n");
     }
 

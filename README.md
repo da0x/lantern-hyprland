@@ -148,6 +148,10 @@ Each page does one thing. The sidebar groups them by what they are for.
   and which keys are bound more than once, with a search.
 - **Options:** every Hyprland option with its value, default and description, and which
   ones your config sets or changes.
+- **Plugins:** the plugins Hyprland has loaded, the ones your config loads, and the ones
+  you turned off from Lantern, each with On and Off. A switch takes effect at once and
+  does not change what loads at login. A plugin runs inside Hyprland, so one with a bug
+  can crash it as it is turned on or off.
 - **Inspect:** the running Hyprland, which it only reads, on three tabs. **Tree** is a
   map of your monitors and their windows, and the tree of monitors, workspaces and
   windows, kept current as things change. **Events** is what Hyprland reports as it
@@ -210,6 +214,9 @@ This is everything Lantern touches. Nothing else is read, written or started.
 - **Default apps page:** the `.desktop` files in your and the system's `applications`
   folders, every `mimeapps.list` in the order the XDG specification gives, each folder's
   `mimeinfo.cache`, and `~/.config/xdg-terminals.list`.
+- **Plugins page:** `hyprctl plugin list`, the plugins your config loads, and, to find
+  each loaded plugin's file, which that list leaves out, Hyprland's lock file for its
+  process ID and `/proc/<ID>/maps` for the files it has loaded.
 - **Cursors page:** the cursor themes in your icon folders and the system's, and their
   cursor files, to draw them.
 - **Its own colors:** `~/.config/hypr/hyprtoolkit.conf`, like every hyprtoolkit app.
@@ -295,8 +302,8 @@ it found errors, and puts the files back if it did.
 Everything Lantern keeps for itself is in `~/.config/lantern-hyprland/`, and a menu item
 deletes it for you:
 
-- `settings.json`: the window size, the last page, which areas you allowed, and
-  checklists you dismissed.
+- `settings.json`: the window size, the last page, which areas you allowed, the plugins
+  you turned off from the Plugins page, and checklists you dismissed.
 - `effects.lua`: the effects Activate applies, as plain Hyprland Lua you can copy into
   your own config.
 - `activation.json`: what is active right now, so Deactivate works even after Lantern
@@ -311,6 +318,9 @@ There are no caches and no exports. Copying goes to the clipboard.
 
 - **Waybar, hyprpaper, awww and lantern-paper,** only when you press their On or Off switch. If one is
   running when Lantern writes its files, Lantern restarts it so it reads them.
+- **Hyprland plugins,** only when you press On or Off on the Plugins page, through
+  `hyprctl plugin load` and `hyprctl plugin unload`. What loads at login stays as your
+  config says.
 - **A wallpaper preview.** Picking a picture shows it straight away, without writing
   anything, and leaving the page puts back the one you applied. Applying makes the
   chosen program your only wallpaper program, at login too.

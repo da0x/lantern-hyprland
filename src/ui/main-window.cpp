@@ -18,6 +18,7 @@
 #include "ui/terminal-page.hpp"
 #include "ui/cursors-page.hpp"
 #include "ui/devices-page.hpp"
+#include "ui/plugins-page.hpp"
 #include "ui/displays-page.hpp"
 #include "ui/essentials-page.hpp"
 #include "ui/idle-page.hpp"
@@ -176,6 +177,7 @@ namespace ui {
         IdlePage        idle{palette, defer, loop};
         NightLightPage  nightLight{palette, defer, loop};
         DevicesPage     devices{palette, defer, loop};
+        PluginsPage     plugins{palette, defer, loop};
         AutostartPage   autostart{palette, defer, loop};
         DefaultAppsPage defaultApps{palette, defer, loop};
         ScreenshotsPage screenshots{palette, defer, loop};
@@ -198,7 +200,7 @@ namespace ui {
                            {{"Tree", liveTree.element(), "Live tree"}, {"Events", eventLog.element(), "Event log"}, {"Console", console.element(), "Console"}}};
         // A wallpaper tried on the desktop and not kept goes back when its page is left; a
         // page in a tab counts as open while its tab is.
-        opening = [&wallpaper, &displays, &essentialsPage, &idle, &nightLight, &devices, &autostart, &defaultApps, &screenshots, &screens,
+        opening = [&wallpaper, &displays, &essentialsPage, &idle, &nightLight, &devices, &plugins, &autostart, &defaultApps, &screenshots, &screens,
                    &inspect, &terminalTabs, &systemInfo](const CSharedPointer<Hyprtoolkit::IElement>& opened) {
             const auto page = opened == screens.element()        ? screens.current()
                             : opened == inspect.element()        ? inspect.current()
@@ -220,6 +222,8 @@ namespace ui {
                 idle.refresh();
             if (page == devices.element())
                 devices.refresh();
+            if (page == plugins.element())
+                plugins.refresh();
             if (page == autostart.element())
                 autostart.refresh();
             if (page == defaultApps.element())
@@ -302,6 +306,7 @@ namespace ui {
         addGroup("Hyprland", false);
         addPageButton("Keyboard shortcuts", keybindings.element());
         addPageButton("Options", optionsPage.element());
+        addPageButton("Plugins", plugins.element());
         addPageButton("Inspect", inspect.element());
         addPageButton("Activate", activate.element());
         screens.onSwitched([&opening, &screens] { opening(screens.element()); });
@@ -388,7 +393,7 @@ namespace ui {
         });
         // Every element made in the old colors is made again: the long-lived ones in place,
         // and the pages' contents, some with colors baked into their text, from their data.
-        const auto redraw = [&keybindings, &optionsPage, &liveTree, &eventLog, &bar, &wallpaper, &theme, &terminal, &systemInfo, &cursors, &displays, &input, &essentialsPage, &idle, &nightLight, &devices, &autostart, &defaultApps, &screenshots, &accessibility, &windows, &activate, &console](bool resized) {
+        const auto redraw = [&keybindings, &optionsPage, &liveTree, &eventLog, &bar, &wallpaper, &theme, &terminal, &systemInfo, &cursors, &displays, &input, &essentialsPage, &idle, &nightLight, &devices, &plugins, &autostart, &defaultApps, &screenshots, &accessibility, &windows, &activate, &console](bool resized) {
             // The pages first, so the elements they let go of are not drawn again in between;
             // what they make is already right, so only what was there before is rebuilt.
             // The Theme page draws itself again after its own change; a new text size is another's.
@@ -408,6 +413,7 @@ namespace ui {
             idle.restyle();
             nightLight.restyle();
             devices.restyle();
+            plugins.restyle();
             autostart.restyle();
             defaultApps.restyle();
             screenshots.restyle();
