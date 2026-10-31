@@ -486,10 +486,11 @@ namespace desktop {
                 "        if not wallpaper then\n"
                 "            return\n"
                 "        end\n"
-                "        -- Tried again for a few seconds while the wallpaper program starts, as at login.\n";
+                "        -- At once, with the workspace, and tried again for a few seconds while the wallpaper\n"
+                "        -- program starts, as at login.\n";
         if (program == WallpaperProgram::awww)
             text += "        hl.exec_cmd(\"for try in 1 2 3 4 5 6 7 8 9 10; do awww img -o \" .. workspace.monitor.name .. \" --resize \" .. wallpaper[2] .. "
-                    "\" --transition-type fade '\" .. wallpaper[1] .. \"' && break; sleep 0.5; done\")\n";
+                    "\" --transition-type none '\" .. wallpaper[1] .. \"' && break; sleep 0.5; done\")\n";
         else
             text += "        hl.exec_cmd(\"for try in 1 2 3 4 5 6 7 8 9 10; do hyprctl hyprpaper wallpaper '\" .. workspace.monitor.name .. \", \" .. wallpaper[1] .. "
                     "\", \" .. wallpaper[2] .. \"' && break; sleep 0.5; done\")\n";

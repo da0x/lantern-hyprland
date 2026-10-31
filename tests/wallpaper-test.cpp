@@ -198,6 +198,8 @@ namespace {
         EXPECT_TRUE(awww->contains(R"([2] = { "/home/me/sea.png", "crop" },)"));
         EXPECT_TRUE(awww->contains("hl.on(\"workspace.active\", showOn)"));
         EXPECT_TRUE(awww->contains("awww img -o"));
+        // No fade: the image changes with the workspace.
+        EXPECT_TRUE(awww->contains("--transition-type none"));
         const auto hyprpaper = desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::hyprpaper, Wallpaper{"/rest.png", FitMode::tile}, own);
         ASSERT_TRUE(hyprpaper.has_value());
         EXPECT_TRUE(hyprpaper->contains(R"(local rest = { "/rest.png", "tile" })"));
