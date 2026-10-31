@@ -25,6 +25,7 @@
 #include <array>
 #include <format>
 #include <fstream>
+#include <random>
 #include <sstream>
 
 namespace ui {
@@ -186,7 +187,7 @@ namespace ui {
             const auto image = succeeded ? desktop::awwwImage(output) : std::nullopt;
             awwwShows        = image ? std::optional{desktop::Wallpaper{*image, fitFromWord(settings.awwwFit)}} : std::nullopt;
             // With workspaces of their own, awww shows the active one's.
-            if (program == desktop::WallpaperProgram::awww && !tried && awwwShows && !workspace && !configRest)
+            if (program == desktop::WallpaperProgram::awww && !tried && awwwShows && !workspace && !configRest && !randomFrom)
                 selected = awwwShows;
             if (!reviewing)
                 showOverview();
@@ -411,11 +412,11 @@ namespace ui {
         const auto environment = foundation::currentEnvironment();
         const bool awwwChosen  = program == desktop::WallpaperProgram::awww;
         const auto config      = configuration::mainConfig(configuration::lanternLaunch());
-        const auto planned     = config ? desktop::planWallpaperSetup(program, mainWallpaper(), workspaces, *config, environment)
+        const auto planned     = config ? desktop::planWallpaperSetup(program, mainWallpaper(), perWorkspace(), *config, environment)
                                         : std::expected<std::vector<configuration::FileChange>, std::string>{std::unexpect, config.error()};
         const auto& other      = awwwChosen ? hyprpaper : awww;
         // With workspaces of their own, awww shows the active one's, not every workspace's.
-        const bool shows       = awwwChosen ? awww.running() && (!workspaces.empty() || mainWallpaper() == awwwShows) : hyprpaper.running();
+        const bool shows       = awwwChosen ? awww.running() && (!perWorkspace().empty() || mainWallpaper() == awwwShows) : hyprpaper.running();
         const bool applied     = planned && planned->empty() && !other.running() && shows && !tried;
         const bool undoable    = configuration::latestChange(application::backupsFolder(environment), changeName).has_value();
         const bool off         = desktop::wallpaperRequirement(program, environment).met() && !current().running();
@@ -437,6 +438,8 @@ namespace ui {
                                         palette));
         else
             buttons.push_back(button("Review changes", 160, true, [this] { defer([this] { showReview(); }); }));
+        if (applied && randomFrom)
+            buttons.push_back(button("Shuffle now", 140, true, [this] { defer([this] { shuffle(); }); }));
         setFooter(footer, buttons, nullptr, away);
 
         if (tried)
@@ -673,6 +676,13 @@ namespace ui {
             setFooter(footer, {});
             return;
         }
+        if (randomFrom) {
+            cards.clear();
+            selectionActions = nullptr;
+            body->addChild(randomPanel());
+            fillStatus();
+            return;
+        }
         body->addChild(chooser());
         body->addChild(space(6));
         body->addChild(grid());
@@ -682,7 +692,7 @@ namespace ui {
     void WallpaperPage::showReview() {
         const auto environment = foundation::currentEnvironment();
         const auto config      = configuration::mainConfig(configuration::lanternLaunch());
-        auto       planned     = config ? desktop::planWallpaperSetup(program, mainWallpaper(), workspaces, *config, environment)
+        auto       planned     = config ? desktop::planWallpaperSetup(program, mainWallpaper(), perWorkspace(), *config, environment)
                                         : std::expected<std::vector<configuration::FileChange>, std::string>{std::unexpect, config.error()};
         if (!planned) {
             outcome = planned.error();
@@ -707,7 +717,10 @@ namespace ui {
             steps.emplace_back("Restart hyprpaper, so it reads hyprpaper.conf.");
         if (awwwChosen)
             steps.emplace_back("Give awww the image. awww shows it again whenever it starts.");
-        if (!workspaces.empty()) {
+        if (randomFrom) {
+            steps.push_back(std::format("Show a random image from {} on each workspace, a new one for each workspace you open, kept until you log out or shuffle.",
+                                        shortPath(*randomFrom)));
+        } else if (!workspaces.empty()) {
             std::string numbers;
             for (const auto& [number, wallpaper] : workspaces)
                 numbers += std::format("{}{}", numbers.empty() ? "" : ", ", number);
@@ -746,7 +759,7 @@ namespace ui {
             record = *written;
         }
         tried      = false;
-        configRest = workspaces.empty() ? std::nullopt : std::optional{mainWallpaper()};
+        configRest = perWorkspace().empty() ? std::nullopt : std::optional{mainWallpaper()};
         other.turnOff();
 
         if (awwwChosen) {
@@ -755,7 +768,10 @@ namespace ui {
             if (awww.running() && awwwCommand) {
                 if (const auto arguments = desktop::awwwArguments(mainWallpaper()))
                     (void)application::runCommand(loop, *awwwCommand, *arguments, [this](bool, std::string) {
-                        showActiveWorkspace();
+                        if (randomFrom)
+                            shuffle();
+                        else
+                            showActiveWorkspace();
                         askAwww();
                     });
             } else {
@@ -769,7 +785,10 @@ namespace ui {
         } else if (record) {
             outcome = "Applied. hyprpaper is restarting…";
             hyprpaper.restartToRead(*record, [this](std::string what) {
-                showActiveWorkspace();
+                if (randomFrom)
+                    shuffle();
+                else
+                    showActiveWorkspace();
                 outcome = std::move(what);
                 if (!reviewing)
                     showOverview();
@@ -847,6 +866,7 @@ namespace ui {
     void WallpaperPage::readWorkspaces() {
         workspaces.clear();
         configRest.reset();
+        randomFrom.reset();
         luaConfig         = false;
         const auto config = configuration::mainConfig(configuration::lanternLaunch());
         if (!config || !config->lua())
@@ -855,8 +875,10 @@ namespace ui {
         std::ifstream     file{config->file};
         std::stringstream text;
         text << file.rdbuf();
-        workspaces = desktop::workspaceWallpapersIn(text.str());
-        configRest = desktop::restWallpaperIn(text.str());
+        const auto read = desktop::perWorkspaceIn(text.str());
+        workspaces      = read.own;
+        randomFrom      = read.randomFrom;
+        configRest      = desktop::restWallpaperIn(text.str());
     }
 
     void WallpaperPage::fillWorkspaces() {
@@ -866,8 +888,9 @@ namespace ui {
         // Hyprland runs code when a workspace becomes active only from a Lua config.
         if (!luaConfig || !selected)
             return;
-        workspaceRow->addChild(button("Every workspace", 160, !workspace, [this] { defer([this] { pickWorkspace(std::nullopt); }); }));
-        const int last = std::max(workspaceCount, workspaces.empty() ? 0 : workspaces.rbegin()->first);
+        workspaceRow->addChild(button("Every workspace", 160, !workspace && !randomFrom, [this] { defer([this] { pickWorkspace(std::nullopt); }); }));
+        // A random image each, so none is picked by number.
+        const int last = randomFrom ? 0 : std::max(workspaceCount, workspaces.empty() ? 0 : workspaces.rbegin()->first);
         for (int number = 1; number <= last; ++number) {
             const bool chosen = workspace == number;
             const auto own    = workspaces.find(number);
@@ -905,9 +928,21 @@ namespace ui {
             });
             workspaceRow->addChild(card);
         }
+        workspaceRow->addChild(button("Random", 100, randomFrom.has_value(), [this] { defer([this] { toggleRandom(); }); }));
     }
 
     void WallpaperPage::pickWorkspace(std::optional<int> number) {
+        if (randomFrom) {
+            randomFrom.reset();
+            outcome.clear();
+            if (number) {
+                everyOther = selected;
+                workspace  = number;
+                if (const auto own = workspaces.find(*number); own != workspaces.end())
+                    selected = own->second;
+            }
+            return showOverview();
+        }
         if (number == workspace || !selected)
             return;
         if (!workspace)
@@ -933,30 +968,137 @@ namespace ui {
     }
 
     void WallpaperPage::showActiveWorkspace() {
-        if (workspaces.empty() || !hyprctl)
+        if (perWorkspace().empty() || !hyprctl)
             return;
-        (void)application::runCommand(loop, *hyprctl, {"activeworkspace", "-j"}, [this](bool succeeded, std::string output) {
+        (void)application::runCommand(loop, *hyprctl, {"monitors", "-j"}, [this](bool succeeded, std::string output) {
             const auto json = succeeded ? nlohmann::json::parse(output, nullptr, false) : nlohmann::json{};
-            if (!json.is_object() || !json.contains("id") || !json.contains("monitor") || !json["id"].is_number_integer() || !json["monitor"].is_string())
+            if (!json.is_array())
                 return;
-            const auto own       = workspaces.find(json["id"].get<int>());
-            const auto wallpaper = own != workspaces.end() ? own->second : mainWallpaper();
-            const auto monitor   = json["monitor"].get<std::string>();
-            if (program == desktop::WallpaperProgram::awww) {
-                auto arguments = desktop::awwwArguments(wallpaper);
-                if (!arguments || !awwwCommand)
-                    return;
-                arguments->insert(arguments->begin() + 1, {"-o", monitor});
-                (void)application::runCommand(loop, *awwwCommand, *arguments, [this](bool, std::string) { askAwww(); });
-                return;
+            std::map<int, std::filesystem::path> chosen;
+            if (randomFrom) {
+                std::ifstream     file{desktop::randomChoicesFile(foundation::currentEnvironment())};
+                std::stringstream text;
+                text << file.rdbuf();
+                chosen = desktop::randomChoicesIn(text.str());
             }
-            // hyprctl's argument starts with the monitor, which is empty for every monitor.
-            auto arguments = desktop::showWallpaperArguments(wallpaper);
-            if (!arguments)
-                return;
-            arguments->back() = monitor + arguments->back();
-            (void)application::runCommand(loop, *hyprctl, *arguments, [](bool, std::string) {});
+            for (const auto& monitor : json) {
+                const auto active = monitor.find("activeWorkspace");
+                const auto name   = monitor.find("name");
+                if (active == monitor.end() || !active->is_object() || !active->contains("id") || !(*active)["id"].is_number_integer() || name == monitor.end() ||
+                    !name->is_string())
+                    continue;
+                const auto number = (*active)["id"].get<int>();
+                auto       wallpaper = mainWallpaper();
+                if (randomFrom) {
+                    const auto image = chosen.find(number);
+                    if (image == chosen.end())
+                        continue;
+                    wallpaper.image = image->second;
+                } else if (const auto own = workspaces.find(number); own != workspaces.end()) {
+                    wallpaper = own->second;
+                }
+                if (program == desktop::WallpaperProgram::awww) {
+                    auto arguments = desktop::awwwArguments(wallpaper);
+                    if (!arguments || !awwwCommand)
+                        continue;
+                    arguments->insert(arguments->begin() + 1, {"-o", name->get<std::string>()});
+                    (void)application::runCommand(loop, *awwwCommand, *arguments, [this](bool, std::string) { askAwww(); });
+                    continue;
+                }
+                // hyprctl's argument starts with the monitor, which is empty for every monitor.
+                auto arguments = desktop::showWallpaperArguments(wallpaper);
+                if (!arguments)
+                    continue;
+                arguments->back() = name->get<std::string>() + arguments->back();
+                (void)application::runCommand(loop, *hyprctl, *arguments, [](bool, std::string) {});
+            }
         });
+    }
+
+    void WallpaperPage::toggleRandom() {
+        if (workspace) {
+            selected = everyOther;
+            workspace.reset();
+        }
+        randomFrom = randomFrom ? std::nullopt : std::optional{desktop::wallpaperFolder(foundation::currentEnvironment())};
+        outcome.clear();
+        showOverview();
+    }
+
+    void WallpaperPage::chooseRandomFolder() {
+        const auto opened = files.chooseFolder("Choose a folder of wallpapers", [this](std::optional<std::filesystem::path> chosen) {
+            if (!chosen)
+                return;
+            randomFrom = *chosen;
+            outcome.clear();
+            showOverview();
+        });
+        if (!opened) {
+            outcome = std::format("The file chooser did not open: {}.", opened.error());
+            showOverview();
+        }
+    }
+
+    void WallpaperPage::shuffle() {
+        if (!randomFrom || !hyprctl)
+            return;
+        (void)application::runCommand(loop, *hyprctl, {"workspaces", "-j"}, [this](bool succeeded, std::string output) {
+            const auto json = succeeded ? nlohmann::json::parse(output, nullptr, false) : nlohmann::json{};
+            if (!json.is_array() || !randomFrom)
+                return;
+            std::vector<int> numbers;
+            for (const auto& entry : json)
+                if (entry.contains("id") && entry["id"].is_number_integer() && entry["id"].get<int>() > 0)
+                    numbers.push_back(entry["id"].get<int>());
+            const auto images  = desktop::randomCandidates(*randomFrom);
+            const auto chosen  = desktop::shuffledWorkspaces(numbers, images, std::random_device{}());
+            const auto file    = desktop::randomChoicesFile(foundation::currentEnvironment());
+            std::ofstream{file} << desktop::randomChoicesText(chosen);
+            showActiveWorkspace();
+        });
+    }
+
+    CSharedPointer<Hyprtoolkit::IElement> WallpaperPage::randomPanel() {
+        const auto panel = Hyprtoolkit::CColumnLayoutBuilder::begin()->gap(8)->size(CDynamicSize{CDynamicSize::HT_SIZE_PERCENT, CDynamicSize::HT_SIZE_AUTO, {1.0, 1.0}})->commence();
+        panel->addChild(markupLine("<span weight=\"600\">A random wallpaper for each workspace</span>", palette));
+        panel->addChild(paragraph("Each workspace shows a random image from this folder when you first go to it, a different one while there are enough, and keeps "
+                                  "it until you log out or shuffle. Images added later are seen once Hyprland reads its config again.",
+                                  palette, true));
+        const auto images = desktop::randomCandidates(*randomFrom);
+        const auto folder = leftRow();
+        folder->rebuild()->gap(12)->commence();
+        const auto where = markupLine(std::format("<span weight=\"600\">{}</span>   {}", escapeMarkup(shortPath(*randomFrom)),
+                                                  images.empty() ? std::string{"no images in it"} : std::format("{} images", images.size())),
+                                      palette);
+        where->rebuild()->size(CDynamicSize{CDynamicSize::HT_SIZE_AUTO, CDynamicSize::HT_SIZE_AUTO, {1.0, 1.0}})->commence();
+        folder->addChild(where);
+        folder->addChild(button("Choose folder…", 160, false, [this] { defer([this] { chooseRandomFolder(); }); }));
+        panel->addChild(folder);
+        panel->addChild(markupLine("<span weight=\"600\">Fit</span>", palette));
+        const auto fits = leftRow();
+        fits->rebuild()->gap(4)->commence();
+        fitButtons.clear();
+        for (const auto& info : desktop::fitModes()) {
+            if (info.mode == desktop::FitMode::tile && program == desktop::WallpaperProgram::awww)
+                continue;
+            const auto made = button(std::string{info.name}, 84, info.mode == selected->fit, [this, mode = info.mode] {
+                defer([this, mode] {
+                    if (workspace && everyOther)
+                        everyOther->fit = mode;
+                    selected->fit = mode;
+                    for (const auto& [each, made] : fitButtons)
+                        made->rebuild()->accent(each == mode)->commence();
+                    fillStatus();
+                });
+            });
+            fitButtons.emplace_back(info.mode, made);
+            fits->addChild(made);
+        }
+        panel->addChild(fits);
+        status = Hyprtoolkit::CColumnLayoutBuilder::begin()->gap(5)->size(CDynamicSize{CDynamicSize::HT_SIZE_PERCENT, CDynamicSize::HT_SIZE_AUTO, {1.0, 1.0}})->commence();
+        statusShown.clear();
+        panel->addChild(status);
+        return panel;
     }
 
 }

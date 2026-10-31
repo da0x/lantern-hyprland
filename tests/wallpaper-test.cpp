@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "desktop/wallpaper.hpp"
+#include "configuration/lua-edit.hpp"
 
 #include <gtest/gtest.h>
 
@@ -9,6 +10,7 @@
 #include <atomic>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <string>
 
 #include <unistd.h>
@@ -173,11 +175,11 @@ namespace {
 
         // Workspaces of their own add the block that shows them, which reads back.
         const desktop::WorkspaceWallpapers workspaces{{1, Wallpaper{"/one.png", FitMode::cover}}, {3, Wallpaper{"/three.jpg", FitMode::contain}}};
-        const auto withWorkspaces = desktop::planWallpaperSetup(desktop::WallpaperProgram::awww, Wallpaper{"/a.png", FitMode::fill}, workspaces, config, environment);
+        const auto withWorkspaces = desktop::planWallpaperSetup(desktop::WallpaperProgram::awww, Wallpaper{"/a.png", FitMode::fill}, {workspaces, {}}, config, environment);
         ASSERT_TRUE(withWorkspaces.has_value()) << withWorkspaces.error();
         ASSERT_EQ(withWorkspaces->size(), 1U);
         const auto& proposed = (*withWorkspaces)[0].proposed;
-        EXPECT_EQ(desktop::workspaceWallpapersIn(proposed), workspaces);
+        EXPECT_EQ(desktop::perWorkspaceIn(proposed), (desktop::PerWorkspace{workspaces, {}}));
         EXPECT_EQ(desktop::restWallpaperIn(proposed), (Wallpaper{"/a.png", FitMode::fill}));
         std::ofstream{root / "dotfiles/hyprland.lua"} << proposed;
         // And without them, the block goes, leaving the config as it was.
@@ -189,31 +191,49 @@ namespace {
     }
 
     TEST(Wallpaper, ShowsEachWorkspacesWallpaperWhenItBecomesActive) {
-        const desktop::WorkspaceWallpapers workspaces{{2, Wallpaper{"/home/me/sea.png", FitMode::cover}}};
-        const auto awww = desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::awww, Wallpaper{"/rest.png", FitMode::contain}, workspaces);
+        const desktop::PerWorkspace own{{{2, Wallpaper{"/home/me/sea.png", FitMode::cover}}}, {}};
+        const auto awww = desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::awww, Wallpaper{"/rest.png", FitMode::contain}, own);
         ASSERT_TRUE(awww.has_value());
-        EXPECT_EQ(*awww, R"(do
-    local wallpapers = {
-        [2] = { "/home/me/sea.png", "crop" },
-    }
-    local rest = { "/rest.png", "fit" }
-    hl.on("workspace.active", function(workspace)
-        if not workspace.monitor then
-            return
-        end
-        local wallpaper = workspace.id and wallpapers[workspace.id] or rest
-        hl.exec_cmd("awww img -o " .. workspace.monitor.name .. " --resize " .. wallpaper[2] .. " --transition-type fade '" .. wallpaper[1] .. "'")
-    end)
-end
-)");
-        const auto hyprpaper = desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::hyprpaper, Wallpaper{"/rest.png", FitMode::tile}, workspaces);
+        EXPECT_TRUE(awww->contains(R"(local rest = { "/rest.png", "fit" })"));
+        EXPECT_TRUE(awww->contains(R"([2] = { "/home/me/sea.png", "crop" },)"));
+        EXPECT_TRUE(awww->contains("hl.on(\"workspace.active\", showOn)"));
+        EXPECT_TRUE(awww->contains("awww img -o"));
+        const auto hyprpaper = desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::hyprpaper, Wallpaper{"/rest.png", FitMode::tile}, own);
         ASSERT_TRUE(hyprpaper.has_value());
         EXPECT_TRUE(hyprpaper->contains(R"(local rest = { "/rest.png", "tile" })"));
         EXPECT_TRUE(hyprpaper->contains("hyprctl hyprpaper wallpaper"));
         // What the shell or hyprctl would split or end early is refused.
-        EXPECT_FALSE(desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::awww, Wallpaper{"/it's.png", FitMode::cover}, workspaces).has_value());
-        EXPECT_FALSE(desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::hyprpaper, Wallpaper{"/a,b.png", FitMode::cover}, workspaces).has_value());
-        EXPECT_FALSE(desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::awww, Wallpaper{"/rest.png", FitMode::tile}, workspaces).has_value());
+        EXPECT_FALSE(desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::awww, Wallpaper{"/it's.png", FitMode::cover}, own).has_value());
+        EXPECT_FALSE(desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::hyprpaper, Wallpaper{"/a,b.png", FitMode::cover}, own).has_value());
+        EXPECT_FALSE(desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::awww, Wallpaper{"/rest.png", FitMode::tile}, own).has_value());
+
+        // From a folder, the block reads back as that folder, with the fit of the rest.
+        const desktop::PerWorkspace random{{}, "/home/me/Pictures/Wallpapers"};
+        const auto fromFolder = desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::awww, Wallpaper{"/rest.png", FitMode::cover}, random);
+        ASSERT_TRUE(fromFolder.has_value());
+        const auto config = configuration::withLuaBlock("", "a wallpaper for each workspace", *fromFolder, true);
+        EXPECT_EQ(desktop::perWorkspaceIn(config), random);
+        EXPECT_EQ(desktop::restWallpaperIn(config), (Wallpaper{"/rest.png", FitMode::cover}));
+    }
+
+    TEST(Wallpaper, ShufflesADifferentImageOntoEachWorkspace) {
+        const std::vector<std::filesystem::path> images{"/a.png", "/b.png", "/c.png"};
+        const std::vector<int>                   three{1, 2, 3};
+        const auto                               chosen = desktop::shuffledWorkspaces(three, images, 7);
+        ASSERT_EQ(chosen.size(), 3U);
+        std::set<std::filesystem::path> different;
+        for (const auto& [number, image] : chosen)
+            different.insert(image);
+        EXPECT_EQ(different.size(), 3U);
+        // More workspaces than images: every one still gets one.
+        const std::vector<int> five{1, 2, 3, 4, 5};
+        EXPECT_EQ(desktop::shuffledWorkspaces(five, images, 7).size(), 5U);
+        EXPECT_TRUE(desktop::shuffledWorkspaces(five, {}, 7).empty());
+
+        // The session's choices are kept as a number, a tab and a path on each line.
+        EXPECT_EQ(desktop::randomChoicesIn(desktop::randomChoicesText(chosen)), chosen);
+        EXPECT_EQ(desktop::randomChoicesIn("1\t/a b.png\nnot a line\n12\t/c.png\n"), (std::map<int, std::filesystem::path>{{1, "/a b.png"}, {12, "/c.png"}}));
+        EXPECT_EQ(desktop::randomChoicesFile(foundation::Environment{{"XDG_RUNTIME_DIR", "/run/user/1000"}}), "/run/user/1000/lantern-workspace-wallpapers");
     }
 
 }

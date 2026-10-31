@@ -6,6 +6,7 @@
 #include "desktop/waybar.hpp"
 #include "foundation/environment.hpp"
 
+#include <cstdint>
 #include <expected>
 #include <filesystem>
 #include <map>
@@ -52,6 +53,17 @@ namespace desktop {
     // The workspaces given a wallpaper of their own, by number.
     using WorkspaceWallpapers = std::map<int, Wallpaper>;
 
+    // How workspaces get wallpapers other than every workspace's.
+    struct PerWorkspace {
+        WorkspaceWallpapers                  own;
+        // A random image from this folder for each workspace instead, chosen when the
+        // workspace is first shown and kept until the session ends or they are shuffled.
+        std::optional<std::filesystem::path> randomFrom;
+
+        [[nodiscard]] bool empty() const { return own.empty() && !randomFrom; }
+        bool               operator==(const PerWorkspace&) const = default;
+    };
+
     // What the program needs: itself.
     [[nodiscard]] Requirement wallpaperRequirement(WallpaperProgram program, const foundation::Environment& environment);
 
@@ -86,17 +98,35 @@ namespace desktop {
     // which hyprctl would split.
     [[nodiscard]] std::expected<std::vector<std::string>, std::string> showWallpaperArguments(const Wallpaper& wallpaper);
 
-    // The workspaces the Lua config gives a wallpaper of their own, from the block
-    // workspaceWallpaperBlock writes.
-    [[nodiscard]] WorkspaceWallpapers workspaceWallpapersIn(std::string_view config);
+    // How the Lua config gives workspaces wallpapers, from the block workspaceWallpaperBlock
+    // writes.
+    [[nodiscard]] PerWorkspace perWorkspaceIn(std::string_view config);
 
     // The wallpaper that block shows on every other workspace.
     [[nodiscard]] std::optional<Wallpaper> restWallpaperIn(std::string_view config);
 
-    // The Lua that has `program` show each workspace's wallpaper whenever it becomes active,
-    // and `rest` on every other workspace, on the workspace's monitor. Refuses a path with a
-    // quote or a backslash, and with hyprpaper, a comma.
-    [[nodiscard]] std::expected<std::string, std::string> workspaceWallpaperBlock(WallpaperProgram program, const Wallpaper& rest, const WorkspaceWallpapers& workspaces);
+    // The Lua that has `program` show each workspace's wallpaper on its monitor whenever it
+    // becomes active: its own, or `rest`, or with a folder, its random image with rest's fit.
+    // Refuses a path with a quote or a backslash, and with hyprpaper, a comma.
+    [[nodiscard]] std::expected<std::string, std::string> workspaceWallpaperBlock(WallpaperProgram program, const Wallpaper& rest, const PerWorkspace& perWorkspace);
+
+    // Where the random images chosen for this session's workspaces are kept:
+    // $XDG_RUNTIME_DIR, which is emptied when the user logs out.
+    [[nodiscard]] std::filesystem::path randomChoicesFile(const foundation::Environment& environment);
+
+    // The random images chosen, by workspace, from that file's text: a workspace's number,
+    // a tab, and its image on each line.
+    [[nodiscard]] std::map<int, std::filesystem::path> randomChoicesIn(std::string_view text);
+    [[nodiscard]] std::string                          randomChoicesText(const std::map<int, std::filesystem::path>& choices);
+
+    // The images directly in `folder` that a random choice can show: those whose path has no
+    // quote or comma, which the command could not pass on. In order of their paths.
+    [[nodiscard]] std::vector<std::filesystem::path> randomCandidates(const std::filesystem::path& folder);
+
+    // A random image of `images` for each of `workspaces`, each a different one while there
+    // are enough.
+    [[nodiscard]] std::map<int, std::filesystem::path> shuffledWorkspaces(std::span<const int> workspaces, std::span<const std::filesystem::path> images,
+                                                                          std::uint_fast32_t seed);
 
     // The command that starts the program at login.
     [[nodiscard]] std::string_view loginCommand(WallpaperProgram program);
@@ -109,7 +139,7 @@ namespace desktop {
     // the file it points at is the one changed; the link stays. Empty when nothing needs to
     // change.
     [[nodiscard]] std::expected<std::vector<configuration::FileChange>, std::string> planWallpaperSetup(WallpaperProgram program, const Wallpaper& wallpaper,
-                                                                                                       const WorkspaceWallpapers&       workspaces,
+                                                                                                       const PerWorkspace&              perWorkspace,
                                                                                                        const configuration::MainConfig& config,
                                                                                                        const foundation::Environment&   environment);
 

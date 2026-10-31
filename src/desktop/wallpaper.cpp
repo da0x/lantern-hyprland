@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <charconv>
 #include <array>
 #include <format>
 #include <cstdint>
@@ -338,20 +339,23 @@ namespace desktop {
             return std::nullopt;
         }
 
-        std::expected<std::string, std::string> luaEntry(WallpaperProgram program, const Wallpaper& wallpaper) {
-            const auto path = wallpaper.image.string();
+        std::expected<std::string, std::string> luaPath(WallpaperProgram program, const std::filesystem::path& file) {
+            const auto path = file.string();
             if (path.find_first_of("'\"\\\n") != std::string::npos)
                 return std::unexpected{std::format("{} has a quote or a backslash in it, which the command cannot pass on", path)};
             if (program == WallpaperProgram::hyprpaper && path.contains(','))
                 return std::unexpected{std::format("{} has a comma in it, which hyprctl cannot pass on", path)};
-            if (program == WallpaperProgram::awww && wallpaper.fit == FitMode::tile)
-                return std::unexpected{"awww cannot tile an image"};
-            return std::format("{{ \"{}\", \"{}\" }}", path, commandFit(program, wallpaper.fit));
+            return std::format("\"{}\"", path);
         }
 
-    }
-
-    namespace {
+        std::expected<std::string, std::string> luaEntry(WallpaperProgram program, const Wallpaper& wallpaper) {
+            const auto path = luaPath(program, wallpaper.image);
+            if (!path)
+                return std::unexpected{path.error()};
+            if (program == WallpaperProgram::awww && wallpaper.fit == FitMode::tile)
+                return std::unexpected{"awww cannot tile an image"};
+            return std::format("{{ {}, \"{}\" }}", *path, commandFit(program, wallpaper.fit));
+        }
 
         // Each `{ "path", "fit" }` entry of the block, by what comes before it on its line:
         // a workspace's number, or the word rest.
@@ -374,12 +378,19 @@ namespace desktop {
 
     }
 
-    WorkspaceWallpapers workspaceWallpapersIn(std::string_view config) {
-        WorkspaceWallpapers workspaces;
+    PerWorkspace perWorkspaceIn(std::string_view config) {
+        PerWorkspace perWorkspace;
         for (const auto& [key, wallpaper] : blockEntries(config))
             if (key != "rest")
-                workspaces[std::stoi(key)] = wallpaper;
-        return workspaces;
+                perWorkspace.own[std::stoi(key)] = wallpaper;
+        if (const auto block = configuration::luaBlock(config, workspaceBlock)) {
+            static const std::regex folder{R"re(^\s*local folder = "([^"]*)"\s*$)re"};
+            std::istringstream      lines{std::string{*block}};
+            for (std::string line; std::getline(lines, line);)
+                if (std::smatch match; std::regex_match(line, match, folder))
+                    perWorkspace.randomFrom = match[1].str();
+        }
+        return perWorkspace;
     }
 
     std::optional<Wallpaper> restWallpaperIn(std::string_view config) {
@@ -389,29 +400,160 @@ namespace desktop {
         return std::nullopt;
     }
 
-    std::expected<std::string, std::string> workspaceWallpaperBlock(WallpaperProgram program, const Wallpaper& rest, const WorkspaceWallpapers& workspaces) {
-        std::string text = "do\n    local wallpapers = {\n";
-        for (const auto& [number, wallpaper] : workspaces) {
-            const auto entry = luaEntry(program, wallpaper);
-            if (!entry)
-                return std::unexpected{entry.error()};
-            text += std::format("        [{}] = {},\n", number, *entry);
-        }
+    std::expected<std::string, std::string> workspaceWallpaperBlock(WallpaperProgram program, const Wallpaper& rest, const PerWorkspace& perWorkspace) {
         const auto other = luaEntry(program, rest);
         if (!other)
             return std::unexpected{other.error()};
-        text += std::format("    }}\n    local rest = {}\n", *other);
-        text += "    hl.on(\"workspace.active\", function(workspace)\n"
-                "        if not workspace.monitor then\n"
+        std::string text = std::format("do\n    local rest = {}\n", *other);
+        if (perWorkspace.randomFrom) {
+            const auto folder = luaPath(program, *perWorkspace.randomFrom);
+            if (!folder)
+                return std::unexpected{folder.error()};
+            text += std::format("    local folder = {}\n", *folder);
+            text += R"(    local chosen = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/lantern-workspace-wallpapers"
+    local images
+    local function readChosen()
+        local picks = {}
+        local file = io.open(chosen)
+        if file then
+            for line in file:lines() do
+                local id, image = line:match("^(%-?%d+)\t(.+)$")
+                if id then
+                    picks[tonumber(id)] = image
+                end
+            end
+            file:close()
+        end
+        return picks
+    end
+    local function wallpaperOf(id)
+        local picks = readChosen()
+        if not picks[id] then
+            if not images then
+                images = {}
+                local kinds = { png = true, jpg = true, jpeg = true, webp = true, jxl = true }
+                local list = io.popen("find '" .. folder .. "' -maxdepth 1 -type f")
+                for line in list:lines() do
+                    local kind = line:match("%.(%w+)$")
+                    if kind and kinds[kind:lower()] and not line:find("[',]") then
+                        images[#images + 1] = line
+                    end
+                end
+                list:close()
+            end
+            -- One that no other workspace shows, while there is one.
+            local used, unused = {}, {}
+            for _, image in pairs(picks) do
+                used[image] = true
+            end
+            for _, image in ipairs(images) do
+                if not used[image] then
+                    unused[#unused + 1] = image
+                end
+            end
+            local from = #unused > 0 and unused or images
+            if #from == 0 then
+                return nil
+            end
+            picks[id] = from[math.random(#from)]
+            local file = io.open(chosen, "a")
+            if file then
+                file:write(id, "\t", picks[id], "\n")
+                file:close()
+            end
+        end
+        return { picks[id], rest[2] }
+    end
+)";
+        } else {
+            text += "    local wallpapers = {\n";
+            for (const auto& [number, wallpaper] : perWorkspace.own) {
+                const auto entry = luaEntry(program, wallpaper);
+                if (!entry)
+                    return std::unexpected{entry.error()};
+                text += std::format("        [{}] = {},\n", number, *entry);
+            }
+            text += "    }\n"
+                    "    local function wallpaperOf(id)\n"
+                    "        return wallpapers[id] or rest\n"
+                    "    end\n";
+        }
+        text += "    local function showOn(workspace)\n"
+                "        if not workspace or not workspace.monitor or not workspace.id then\n"
                 "            return\n"
                 "        end\n"
-                "        local wallpaper = workspace.id and wallpapers[workspace.id] or rest\n";
+                "        local wallpaper = wallpaperOf(workspace.id)\n"
+                "        if not wallpaper then\n"
+                "            return\n"
+                "        end\n"
+                "        -- Tried again for a few seconds while the wallpaper program starts, as at login.\n";
         if (program == WallpaperProgram::awww)
-            text += "        hl.exec_cmd(\"awww img -o \" .. workspace.monitor.name .. \" --resize \" .. wallpaper[2] .. \" --transition-type fade '\" .. wallpaper[1] .. \"'\")\n";
+            text += "        hl.exec_cmd(\"for try in 1 2 3 4 5 6 7 8 9 10; do awww img -o \" .. workspace.monitor.name .. \" --resize \" .. wallpaper[2] .. "
+                    "\" --transition-type fade '\" .. wallpaper[1] .. \"' && break; sleep 0.5; done\")\n";
         else
-            text += "        hl.exec_cmd(\"hyprctl hyprpaper wallpaper '\" .. workspace.monitor.name .. \", \" .. wallpaper[1] .. \", \" .. wallpaper[2] .. \"'\")\n";
-        text += "    end)\nend\n";
+            text += "        hl.exec_cmd(\"for try in 1 2 3 4 5 6 7 8 9 10; do hyprctl hyprpaper wallpaper '\" .. workspace.monitor.name .. \", \" .. wallpaper[1] .. "
+                    "\", \" .. wallpaper[2] .. \"' && break; sleep 0.5; done\")\n";
+        text += "    end\n"
+                "    hl.on(\"workspace.active\", showOn)\n"
+                "    hl.on(\"hyprland.start\", function()\n"
+                "        showOn(hl.get_active_workspace())\n"
+                "    end)\n"
+                "end\n";
         return text;
+    }
+
+    std::filesystem::path randomChoicesFile(const foundation::Environment& environment) {
+        const auto runtime = foundation::variable(environment, "XDG_RUNTIME_DIR");
+        return std::filesystem::path{runtime && !runtime->empty() ? *runtime : "/tmp"} / "lantern-workspace-wallpapers";
+    }
+
+    std::map<int, std::filesystem::path> randomChoicesIn(std::string_view text) {
+        std::map<int, std::filesystem::path> choices;
+        std::istringstream                   lines{std::string{text}};
+        for (std::string line; std::getline(lines, line);) {
+            const auto tab = line.find('\t');
+            if (tab == std::string::npos || tab + 1 == line.size())
+                continue;
+            int        number = 0;
+            const auto parsed = std::from_chars(line.data(), line.data() + tab, number);
+            if (parsed.ec == std::errc{} && parsed.ptr == line.data() + tab)
+                choices[number] = line.substr(tab + 1);
+        }
+        return choices;
+    }
+
+    std::string randomChoicesText(const std::map<int, std::filesystem::path>& choices) {
+        std::string text;
+        for (const auto& [number, image] : choices)
+            text += std::format("{}\t{}\n", number, image.string());
+        return text;
+    }
+
+    std::vector<std::filesystem::path> randomCandidates(const std::filesystem::path& folder) {
+        std::vector<std::filesystem::path> images;
+        std::error_code                    error;
+        for (const auto& entry : std::filesystem::directory_iterator{folder, error})
+            if (entry.is_regular_file(error) && isImage(entry.path()) && entry.path().string().find_first_of("',") == std::string::npos)
+                images.push_back(entry.path());
+        std::ranges::sort(images);
+        return images;
+    }
+
+    std::map<int, std::filesystem::path> shuffledWorkspaces(std::span<const int> workspaces, std::span<const std::filesystem::path> images, std::uint_fast32_t seed) {
+        std::map<int, std::filesystem::path> choices;
+        if (images.empty())
+            return choices;
+        std::mt19937                       random{seed};
+        std::vector<std::filesystem::path> deck;
+        for (const auto number : workspaces) {
+            if (deck.empty()) {
+                deck.assign(images.begin(), images.end());
+                std::ranges::shuffle(deck, random);
+            }
+            choices[number] = deck.back();
+            deck.pop_back();
+        }
+        return choices;
     }
 
     std::string_view loginCommand(WallpaperProgram program) {
@@ -419,7 +561,7 @@ namespace desktop {
     }
 
     std::expected<std::vector<configuration::FileChange>, std::string> planWallpaperSetup(WallpaperProgram program, const Wallpaper& wallpaper,
-                                                                                         const WorkspaceWallpapers& workspaces, const configuration::MainConfig& config, const foundation::Environment& environment) {
+                                                                                         const PerWorkspace& perWorkspace, const configuration::MainConfig& config, const foundation::Environment& environment) {
         std::vector<configuration::FileChange> changes;
         if (program == WallpaperProgram::hyprpaper) {
             auto change = planWallpaper(wallpaper, environment);
@@ -446,15 +588,15 @@ namespace desktop {
                                               std::pair{std::vector<std::string_view>{"misc", "disable_hyprland_logo"}, std::string_view{"true"}}})
                 if (auto edited = configuration::withLuaConfigValue(current->proposed, path, value))
                     current->proposed = std::move(*edited);
-            if (workspaces.empty()) {
+            if (perWorkspace.empty()) {
                 current->proposed = configuration::withLuaBlock(current->proposed, workspaceBlock, "", false);
             } else {
-                const auto block = workspaceWallpaperBlock(program, wallpaper, workspaces);
+                const auto block = workspaceWallpaperBlock(program, wallpaper, perWorkspace);
                 if (!block)
                     return std::unexpected{block.error()};
                 current->proposed = configuration::withLuaBlock(current->proposed, workspaceBlock, *block, true);
             }
-        } else if (!workspaces.empty()) {
+        } else if (!perWorkspace.empty()) {
             return std::unexpected{"a wallpaper for each workspace needs a Lua config, hyprland.lua"};
         }
         if (current->changes())

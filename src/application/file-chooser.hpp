@@ -30,7 +30,11 @@ namespace application {
         // portal cannot be reached.
         [[nodiscard]] std::expected<void, std::string> chooseImage(const std::string& title, std::function<void(std::optional<std::filesystem::path>)> done);
 
+        // The same for a folder.
+        [[nodiscard]] std::expected<void, std::string> chooseFolder(const std::string& title, std::function<void(std::optional<std::filesystem::path>)> done);
+
       private:
+        [[nodiscard]] std::expected<void, std::string> open(const std::string& title, bool folder, std::function<void(std::optional<std::filesystem::path>)> done);
         static int                                          answered(sd_bus_message* message, void* self, sd_bus_error* error);
         void                                                finish(std::optional<std::filesystem::path> chosen);
 

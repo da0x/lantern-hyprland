@@ -96,6 +96,14 @@ namespace ui {
         void                                                                   showActiveWorkspace();
         // The wallpaper of every workspace without one of its own.
         [[nodiscard]] desktop::Wallpaper                                       mainWallpaper() const;
+        [[nodiscard]] desktop::PerWorkspace                                    perWorkspace() const { return {workspaces, randomFrom}; }
+        // Turns a random wallpaper for each workspace on, from the wallpapers folder, or off.
+        void                                                                   toggleRandom();
+        void                                                                   chooseRandomFolder();
+        // Chooses a new random image for every workspace, and shows the active ones.
+        void                                                                   shuffle();
+        // In place of the chooser and the images, with random wallpapers: the folder and the fit.
+        [[nodiscard]] Hyprutils::Memory::CSharedPointer<Hyprtoolkit::IElement> randomPanel();
         [[nodiscard]] Hyprutils::Memory::CSharedPointer<Hyprtoolkit::IElement> thumbnail(const std::filesystem::path& image);
 
         Hyprutils::Memory::CSharedPointer<Hyprtoolkit::CPalette>             palette;
@@ -149,6 +157,7 @@ namespace ui {
         // What hyprland.lua shows on workspaces without their own, when it gives any theirs.
         std::optional<desktop::Wallpaper>                                    configRest;
         bool                                                                 luaConfig = false;
+        std::optional<std::filesystem::path>                                 randomFrom;
         Hyprutils::Memory::CSharedPointer<Hyprtoolkit::CRowLayoutElement>    workspaceRow;
         // Beside Move to trash, so that a workspace can go back to every workspace's.
         Hyprutils::Memory::CSharedPointer<Hyprtoolkit::CRowLayoutElement>    selectionActions;
