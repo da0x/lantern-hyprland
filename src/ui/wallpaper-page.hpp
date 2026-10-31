@@ -13,6 +13,7 @@
 #include <hyprtoolkit/element/Button.hpp>
 #include <hyprtoolkit/element/Image.hpp>
 #include <hyprtoolkit/element/Rectangle.hpp>
+#include <hyprtoolkit/element/RowLayout.hpp>
 #include <hyprtoolkit/element/Text.hpp>
 #include <hyprtoolkit/palette/Palette.hpp>
 
@@ -82,6 +83,19 @@ namespace ui {
         // Makes the cards for the row shown.
         void                                                                   fillGrid();
         void                                                                   scroll(Hyprtoolkit::Input::eAxisAxis axis, float delta);
+        // Reads the wallpapers hyprland.lua gives workspaces of their own.
+        void                                                                   readWorkspaces();
+        // Makes the workspace buttons: every workspace, and each by number with its image.
+        void                                                                   fillWorkspaces();
+        // Chooses the wallpaper of workspace `number`, or with none, of every workspace
+        // without one of its own.
+        void                                                                   pickWorkspace(std::optional<int> number);
+        // After a click on an image or a fit: the workspace being chosen for keeps it.
+        void                                                                   keepForWorkspace();
+        // Shows the active workspace's wallpaper on its monitor, once it has one of its own.
+        void                                                                   showActiveWorkspace();
+        // The wallpaper of every workspace without one of its own.
+        [[nodiscard]] desktop::Wallpaper                                       mainWallpaper() const;
         [[nodiscard]] Hyprutils::Memory::CSharedPointer<Hyprtoolkit::IElement> thumbnail(const std::filesystem::path& image);
 
         Hyprutils::Memory::CSharedPointer<Hyprtoolkit::CPalette>             palette;
@@ -128,6 +142,18 @@ namespace ui {
         Hyprutils::Memory::CSharedPointer<Hyprtoolkit::CColumnLayoutElement> gridRows;
         std::map<std::filesystem::path, Hyprutils::Memory::CSharedPointer<Hyprtoolkit::CRectangleElement>> cards;
         std::vector<configuration::FileChange>                               changes;
+        desktop::WorkspaceWallpapers                                         workspaces;
+        // The workspace whose wallpaper is being chosen, and meanwhile, every other one's.
+        std::optional<int>                                                   workspace;
+        std::optional<desktop::Wallpaper>                                    everyOther;
+        // What hyprland.lua shows on workspaces without their own, when it gives any theirs.
+        std::optional<desktop::Wallpaper>                                    configRest;
+        bool                                                                 luaConfig = false;
+        Hyprutils::Memory::CSharedPointer<Hyprtoolkit::CRowLayoutElement>    workspaceRow;
+        // Beside Move to trash, so that a workspace can go back to every workspace's.
+        Hyprutils::Memory::CSharedPointer<Hyprtoolkit::CRowLayoutElement>    selectionActions;
+        bool                                                                 ownShown = false;
+        std::map<std::filesystem::path, Hyprutils::Memory::CSharedPointer<Hyprtoolkit::CImageElement>> workspaceThumbnails;
         std::string                                                          outcome;
     };
 

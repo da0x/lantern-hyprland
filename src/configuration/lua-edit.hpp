@@ -49,4 +49,12 @@ namespace configuration {
     // rule or at the end, when `on`; without it, and the blank line before it, when not.
     [[nodiscard]] std::string withLuaWindowRule(std::string_view config, std::string_view name, std::string_view rule, bool on);
 
+    // The lines between "-- Lantern: <name>" and "-- Lantern: end of <name>", each a line of
+    // its own, when the config has both.
+    [[nodiscard]] std::optional<std::string_view> luaBlock(std::string_view config, std::string_view name);
+
+    // The config with `text`, whole lines, between those two lines when `on`: in place of
+    // what was there, or at the end. Without them, and the blank line before, when not.
+    [[nodiscard]] std::string withLuaBlock(std::string_view config, std::string_view name, std::string_view text, bool on);
+
 }

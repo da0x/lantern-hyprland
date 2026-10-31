@@ -158,7 +158,7 @@ namespace {
         const foundation::Environment     environment{{"HOME", (root / "home").string()}};
         const configuration::MainConfig    config{.file = root / "home/.config/hypr/hyprland.lua", .choice = configuration::Choice::search, .safeMode = false};
 
-        const auto planned = desktop::planWallpaperSetup(desktop::WallpaperProgram::hyprpaper, Wallpaper{"/usr/share/hypr/wall2.png", FitMode::cover}, config, environment);
+        const auto planned = desktop::planWallpaperSetup(desktop::WallpaperProgram::hyprpaper, Wallpaper{"/usr/share/hypr/wall2.png", FitMode::cover}, {}, config, environment);
         ASSERT_TRUE(planned.has_value()) << planned.error();
         ASSERT_EQ(planned->size(), 2U);
         EXPECT_EQ((*planned)[0].file, root / "home/.config/hypr/hyprpaper.conf");
@@ -167,10 +167,53 @@ namespace {
         EXPECT_EQ((*planned)[1].proposed, "hl.on(\"hyprland.start\", function ()\n    hl.exec_cmd(\"hyprpaper\")\nend)\n");
 
         // awww needs only the config, and with it already started, nothing at all.
-        const auto withAwww = desktop::planWallpaperSetup(desktop::WallpaperProgram::awww, Wallpaper{"/a.png", FitMode::cover}, config, environment);
+        const auto withAwww = desktop::planWallpaperSetup(desktop::WallpaperProgram::awww, Wallpaper{"/a.png", FitMode::cover}, {}, config, environment);
         ASSERT_TRUE(withAwww.has_value());
         EXPECT_TRUE(withAwww->empty());
+
+        // Workspaces of their own add the block that shows them, which reads back.
+        const desktop::WorkspaceWallpapers workspaces{{1, Wallpaper{"/one.png", FitMode::cover}}, {3, Wallpaper{"/three.jpg", FitMode::contain}}};
+        const auto withWorkspaces = desktop::planWallpaperSetup(desktop::WallpaperProgram::awww, Wallpaper{"/a.png", FitMode::fill}, workspaces, config, environment);
+        ASSERT_TRUE(withWorkspaces.has_value()) << withWorkspaces.error();
+        ASSERT_EQ(withWorkspaces->size(), 1U);
+        const auto& proposed = (*withWorkspaces)[0].proposed;
+        EXPECT_EQ(desktop::workspaceWallpapersIn(proposed), workspaces);
+        EXPECT_EQ(desktop::restWallpaperIn(proposed), (Wallpaper{"/a.png", FitMode::fill}));
+        std::ofstream{root / "dotfiles/hyprland.lua"} << proposed;
+        // And without them, the block goes, leaving the config as it was.
+        const auto without = desktop::planWallpaperSetup(desktop::WallpaperProgram::awww, Wallpaper{"/a.png", FitMode::fill}, {}, config, environment);
+        ASSERT_TRUE(without.has_value());
+        ASSERT_EQ(without->size(), 1U);
+        EXPECT_EQ((*without)[0].proposed, "hl.on(\"hyprland.start\", function ()\n    hl.exec_cmd(\"awww-daemon\")\nend)\n");
         std::filesystem::remove_all(root);
+    }
+
+    TEST(Wallpaper, ShowsEachWorkspacesWallpaperWhenItBecomesActive) {
+        const desktop::WorkspaceWallpapers workspaces{{2, Wallpaper{"/home/me/sea.png", FitMode::cover}}};
+        const auto awww = desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::awww, Wallpaper{"/rest.png", FitMode::contain}, workspaces);
+        ASSERT_TRUE(awww.has_value());
+        EXPECT_EQ(*awww, R"(do
+    local wallpapers = {
+        [2] = { "/home/me/sea.png", "crop" },
+    }
+    local rest = { "/rest.png", "fit" }
+    hl.on("workspace.active", function(workspace)
+        if not workspace.monitor then
+            return
+        end
+        local wallpaper = workspace.id and wallpapers[workspace.id] or rest
+        hl.exec_cmd("awww img -o " .. workspace.monitor.name .. " --resize " .. wallpaper[2] .. " --transition-type fade '" .. wallpaper[1] .. "'")
+    end)
+end
+)");
+        const auto hyprpaper = desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::hyprpaper, Wallpaper{"/rest.png", FitMode::tile}, workspaces);
+        ASSERT_TRUE(hyprpaper.has_value());
+        EXPECT_TRUE(hyprpaper->contains(R"(local rest = { "/rest.png", "tile" })"));
+        EXPECT_TRUE(hyprpaper->contains("hyprctl hyprpaper wallpaper"));
+        // What the shell or hyprctl would split or end early is refused.
+        EXPECT_FALSE(desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::awww, Wallpaper{"/it's.png", FitMode::cover}, workspaces).has_value());
+        EXPECT_FALSE(desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::hyprpaper, Wallpaper{"/a,b.png", FitMode::cover}, workspaces).has_value());
+        EXPECT_FALSE(desktop::workspaceWallpaperBlock(desktop::WallpaperProgram::awww, Wallpaper{"/rest.png", FitMode::tile}, workspaces).has_value());
     }
 
 }

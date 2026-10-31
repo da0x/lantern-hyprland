@@ -94,4 +94,16 @@ hl.config({ decoration = { rounding = 10 } })
         EXPECT_FALSE(configuration::spacedValue("# font_size 9\n", "font_size").has_value());
     }
 
+    TEST(LuaEdit, ReplacesAndRemovesANamedBlock) {
+        const std::string mine = "-- mine\nhl.config({})\n";
+        const auto        added = configuration::withLuaBlock(mine, "a test", "local a = 1\n", true);
+        EXPECT_EQ(added, "-- mine\nhl.config({})\n\n-- Lantern: a test\nlocal a = 1\n-- Lantern: end of a test\n");
+        EXPECT_EQ(configuration::luaBlock(added, "a test"), "local a = 1\n");
+        const auto changed = configuration::withLuaBlock(added + "-- after\n", "a test", "local a = 2", true);
+        EXPECT_EQ(changed, "-- mine\nhl.config({})\n\n-- Lantern: a test\nlocal a = 2\n-- Lantern: end of a test\n-- after\n");
+        EXPECT_EQ(configuration::withLuaBlock(added, "a test", "", false), mine);
+        EXPECT_FALSE(configuration::luaBlock(mine, "a test").has_value());
+        EXPECT_EQ(configuration::withLuaBlock(mine, "a test", "", false), mine);
+    }
+
 }

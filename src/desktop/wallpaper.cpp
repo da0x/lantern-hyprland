@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <fstream>
 #include <random>
+#include <regex>
 #include <set>
 #include <sstream>
 #include <system_error>
@@ -310,12 +311,115 @@ namespace desktop {
         return std::vector<std::string>{"hyprpaper", "wallpaper", std::format(", {}, {}", path, fit)};
     }
 
+    namespace {
+
+        constexpr auto workspaceBlock = "a wallpaper for each workspace";
+
+        // The fit in the program's own words, as the commands take it.
+        std::string_view commandFit(WallpaperProgram program, FitMode fit) {
+            switch (fit) {
+                case FitMode::cover: return program == WallpaperProgram::awww ? "crop" : "cover";
+                case FitMode::contain: return program == WallpaperProgram::awww ? "fit" : "contain";
+                case FitMode::fill: return "stretch";
+                case FitMode::tile: return "tile";
+            }
+            return "cover";
+        }
+
+        std::optional<FitMode> fitFromCommand(std::string_view word) {
+            if (word == "crop" || word == "cover")
+                return FitMode::cover;
+            if (word == "fit" || word == "contain")
+                return FitMode::contain;
+            if (word == "stretch")
+                return FitMode::fill;
+            if (word == "tile")
+                return FitMode::tile;
+            return std::nullopt;
+        }
+
+        std::expected<std::string, std::string> luaEntry(WallpaperProgram program, const Wallpaper& wallpaper) {
+            const auto path = wallpaper.image.string();
+            if (path.find_first_of("'\"\\\n") != std::string::npos)
+                return std::unexpected{std::format("{} has a quote or a backslash in it, which the command cannot pass on", path)};
+            if (program == WallpaperProgram::hyprpaper && path.contains(','))
+                return std::unexpected{std::format("{} has a comma in it, which hyprctl cannot pass on", path)};
+            if (program == WallpaperProgram::awww && wallpaper.fit == FitMode::tile)
+                return std::unexpected{"awww cannot tile an image"};
+            return std::format("{{ \"{}\", \"{}\" }}", path, commandFit(program, wallpaper.fit));
+        }
+
+    }
+
+    namespace {
+
+        // Each `{ "path", "fit" }` entry of the block, by what comes before it on its line:
+        // a workspace's number, or the word rest.
+        std::vector<std::pair<std::string, Wallpaper>> blockEntries(std::string_view config) {
+            std::vector<std::pair<std::string, Wallpaper>> entries;
+            const auto                                     block = configuration::luaBlock(config, workspaceBlock);
+            if (!block)
+                return entries;
+            static const std::regex entry{R"re(^\s*(?:\[(\d+)\] =|local (rest) =) \{ "([^"]*)", "(\w+)" \},?\s*$)re"};
+            std::istringstream      lines{std::string{*block}};
+            for (std::string line; std::getline(lines, line);) {
+                std::smatch match;
+                if (!std::regex_match(line, match, entry))
+                    continue;
+                if (const auto fit = fitFromCommand(match[4].str()))
+                    entries.emplace_back(match[1].matched ? match[1].str() : match[2].str(), Wallpaper{match[3].str(), *fit});
+            }
+            return entries;
+        }
+
+    }
+
+    WorkspaceWallpapers workspaceWallpapersIn(std::string_view config) {
+        WorkspaceWallpapers workspaces;
+        for (const auto& [key, wallpaper] : blockEntries(config))
+            if (key != "rest")
+                workspaces[std::stoi(key)] = wallpaper;
+        return workspaces;
+    }
+
+    std::optional<Wallpaper> restWallpaperIn(std::string_view config) {
+        for (const auto& [key, wallpaper] : blockEntries(config))
+            if (key == "rest")
+                return wallpaper;
+        return std::nullopt;
+    }
+
+    std::expected<std::string, std::string> workspaceWallpaperBlock(WallpaperProgram program, const Wallpaper& rest, const WorkspaceWallpapers& workspaces) {
+        std::string text = "do\n    local wallpapers = {\n";
+        for (const auto& [number, wallpaper] : workspaces) {
+            const auto entry = luaEntry(program, wallpaper);
+            if (!entry)
+                return std::unexpected{entry.error()};
+            text += std::format("        [{}] = {},\n", number, *entry);
+        }
+        const auto other = luaEntry(program, rest);
+        if (!other)
+            return std::unexpected{other.error()};
+        text += std::format("    }}\n    local rest = {}\n", *other);
+        text += "    hl.on(\"workspace.active\", function(workspace)\n"
+                "        if not workspace.monitor then\n"
+                "            return\n"
+                "        end\n"
+                "        local wallpaper = workspace.id and wallpapers[workspace.id] or rest\n";
+        if (program == WallpaperProgram::awww)
+            text += "        hl.exec_cmd(\"awww img -o \" .. workspace.monitor.name .. \" --resize \" .. wallpaper[2] .. \" --transition-type fade '\" .. wallpaper[1] .. \"'\")\n";
+        else
+            text += "        hl.exec_cmd(\"hyprctl hyprpaper wallpaper '\" .. workspace.monitor.name .. \", \" .. wallpaper[1] .. \", \" .. wallpaper[2] .. \"'\")\n";
+        text += "    end)\nend\n";
+        return text;
+    }
+
     std::string_view loginCommand(WallpaperProgram program) {
         return program == WallpaperProgram::awww ? "awww-daemon" : "hyprpaper";
     }
 
     std::expected<std::vector<configuration::FileChange>, std::string> planWallpaperSetup(WallpaperProgram program, const Wallpaper& wallpaper,
-                                                                                         const configuration::MainConfig& config, const foundation::Environment& environment) {
+                                                                                         const WorkspaceWallpapers& workspaces, const configuration::MainConfig& config, const foundation::Environment& environment) {
         std::vector<configuration::FileChange> changes;
         if (program == WallpaperProgram::hyprpaper) {
             auto change = planWallpaper(wallpaper, environment);
@@ -342,6 +446,16 @@ namespace desktop {
                                               std::pair{std::vector<std::string_view>{"misc", "disable_hyprland_logo"}, std::string_view{"true"}}})
                 if (auto edited = configuration::withLuaConfigValue(current->proposed, path, value))
                     current->proposed = std::move(*edited);
+            if (workspaces.empty()) {
+                current->proposed = configuration::withLuaBlock(current->proposed, workspaceBlock, "", false);
+            } else {
+                const auto block = workspaceWallpaperBlock(program, wallpaper, workspaces);
+                if (!block)
+                    return std::unexpected{block.error()};
+                current->proposed = configuration::withLuaBlock(current->proposed, workspaceBlock, *block, true);
+            }
+        } else if (!workspaces.empty()) {
+            return std::unexpected{"a wallpaper for each workspace needs a Lua config, hyprland.lua"};
         }
         if (current->changes())
             changes.push_back(std::move(*current));

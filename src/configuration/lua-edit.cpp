@@ -244,4 +244,69 @@ namespace configuration {
         return text;
     }
 
+    namespace {
+
+        // Where the block by `name` is: from the start of its first line to just past its
+        // last, and where the text between them starts and ends.
+        struct BlockPlace {
+            std::size_t begin;
+            std::size_t inside;
+            std::size_t insideEnd;
+            std::size_t end;
+        };
+
+        std::optional<BlockPlace> blockIn(std::string_view config, std::string_view name) {
+            const auto opening = std::format("-- Lantern: {}\n", name);
+            const auto closing = std::format("-- Lantern: end of {}", name);
+            auto       begin   = config.find(opening);
+            while (begin != std::string_view::npos && begin > 0 && config[begin - 1] != '\n')
+                begin = config.find(opening, begin + 1);
+            if (begin == std::string_view::npos)
+                return std::nullopt;
+            const auto inside = begin + opening.size();
+            auto       close  = config.find(closing, inside);
+            while (close != std::string_view::npos && config[close - 1] != '\n')
+                close = config.find(closing, close + 1);
+            if (close == std::string_view::npos)
+                return std::nullopt;
+            const auto after = close + closing.size();
+            if (after < config.size() && config[after] != '\n')
+                return std::nullopt;
+            return BlockPlace{begin, inside, close, after < config.size() ? after + 1 : after};
+        }
+
+    }
+
+    std::optional<std::string_view> luaBlock(std::string_view config, std::string_view name) {
+        const auto found = blockIn(config, name);
+        if (!found)
+            return std::nullopt;
+        return config.substr(found->inside, found->insideEnd - found->inside);
+    }
+
+    std::string withLuaBlock(std::string_view config, std::string_view name, std::string_view text, bool on) {
+        std::string body{text};
+        if (!body.empty() && !body.ends_with('\n'))
+            body += '\n';
+        const auto whole = std::format("-- Lantern: {}\n{}-- Lantern: end of {}\n", name, body, name);
+        std::string result{config};
+        const auto  found = blockIn(result, name);
+        if (found && on) {
+            result.replace(found->begin, found->end - found->begin, whole);
+        } else if (found) {
+            auto begin = found->begin;
+            // With the blank line before it, which it was added with.
+            if (begin >= 2 && result[begin - 1] == '\n' && result[begin - 2] == '\n')
+                --begin;
+            result.erase(begin, found->end - begin);
+        } else if (on) {
+            if (!result.empty() && !result.ends_with('\n'))
+                result += '\n';
+            if (!result.empty())
+                result += '\n';
+            result += whole;
+        }
+        return result;
+    }
+
 }

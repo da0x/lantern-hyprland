@@ -8,6 +8,7 @@
 
 #include <expected>
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <span>
 #include <string>
@@ -48,6 +49,9 @@ namespace desktop {
         awww,
     };
 
+    // The workspaces given a wallpaper of their own, by number.
+    using WorkspaceWallpapers = std::map<int, Wallpaper>;
+
     // What the program needs: itself.
     [[nodiscard]] Requirement wallpaperRequirement(WallpaperProgram program, const foundation::Environment& environment);
 
@@ -82,16 +86,30 @@ namespace desktop {
     // which hyprctl would split.
     [[nodiscard]] std::expected<std::vector<std::string>, std::string> showWallpaperArguments(const Wallpaper& wallpaper);
 
+    // The workspaces the Lua config gives a wallpaper of their own, from the block
+    // workspaceWallpaperBlock writes.
+    [[nodiscard]] WorkspaceWallpapers workspaceWallpapersIn(std::string_view config);
+
+    // The wallpaper that block shows on every other workspace.
+    [[nodiscard]] std::optional<Wallpaper> restWallpaperIn(std::string_view config);
+
+    // The Lua that has `program` show each workspace's wallpaper whenever it becomes active,
+    // and `rest` on every other workspace, on the workspace's monitor. Refuses a path with a
+    // quote or a backslash, and with hyprpaper, a comma.
+    [[nodiscard]] std::expected<std::string, std::string> workspaceWallpaperBlock(WallpaperProgram program, const Wallpaper& rest, const WorkspaceWallpapers& workspaces);
+
     // The command that starts the program at login.
     [[nodiscard]] std::string_view loginCommand(WallpaperProgram program);
 
     // Every file change that makes `program` the one wallpaper program, started at login,
     // with `wallpaper`: the Hyprland config starts it and no longer starts the other one,
     // turns off Hyprland's own wallpaper and logo where it sets them, and with hyprpaper,
-    // hyprpaper.conf sets the wallpaper. A config that is a link is
-    // followed, and the file it points at is the one changed; the link stays. Empty when
-    // nothing needs to change.
+    // hyprpaper.conf sets the wallpaper. With `workspaces`, a Lua config gets the block
+    // that shows theirs, and without, loses it. A config that is a link is followed, and
+    // the file it points at is the one changed; the link stays. Empty when nothing needs to
+    // change.
     [[nodiscard]] std::expected<std::vector<configuration::FileChange>, std::string> planWallpaperSetup(WallpaperProgram program, const Wallpaper& wallpaper,
+                                                                                                       const WorkspaceWallpapers&       workspaces,
                                                                                                        const configuration::MainConfig& config,
                                                                                                        const foundation::Environment&   environment);
 
