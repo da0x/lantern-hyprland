@@ -23,4 +23,10 @@ namespace foundation {
         return found != environment.end() ? std::optional{found->second} : std::nullopt;
     }
 
+    std::filesystem::path lanternFolder(const Environment& environment) {
+        if (const auto home = variable(environment, "XDG_CONFIG_HOME"); home && std::filesystem::path{*home}.is_absolute())
+            return std::filesystem::path{*home} / "lantern-hyprland";
+        return std::filesystem::path{variable(environment, "HOME").value_or("")} / ".config" / "lantern-hyprland";
+    }
+
 }

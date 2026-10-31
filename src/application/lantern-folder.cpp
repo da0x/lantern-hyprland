@@ -4,9 +4,7 @@
 namespace application {
 
     std::filesystem::path lanternFolder(const foundation::Environment& environment) {
-        if (const auto home = foundation::variable(environment, "XDG_CONFIG_HOME"); home && std::filesystem::path{*home}.is_absolute())
-            return std::filesystem::path{*home} / "lantern-hyprland";
-        return std::filesystem::path{foundation::variable(environment, "HOME").value_or("")} / ".config" / "lantern-hyprland";
+        return foundation::lanternFolder(environment);
     }
 
     void moveOldFolder(const foundation::Environment& environment) {

@@ -27,8 +27,8 @@
 
 namespace ui {
 
-    // The wallpaper. Lantern draws none of its own: it uses hyprpaper, Hyprland's own
-    // wallpaper program, or awww, which fades between images. It shows the images it finds
+    // The wallpaper, drawn by hyprpaper, Hyprland's own wallpaper program, by awww, which
+    // fades between images, or by Lantern's own lantern-paper. It shows the images it finds
     // to choose from and tries them on the desktop. With hyprpaper it writes the choice to
     // hyprpaper.conf only after the user reviews the change; awww remembers it itself.
     class WallpaperPage {
@@ -66,6 +66,11 @@ namespace ui {
         void                                                                   askAwww();
         void                                                                   showSwitch();
         [[nodiscard]] ProgramSwitch&                                           current();
+        [[nodiscard]] ProgramSwitch&                                           switchOf(desktop::WallpaperProgram of);
+        // The wallpaper programs other than the chosen one that run now, which draw over it.
+        [[nodiscard]] std::vector<desktop::WallpaperProgram>                   othersRunning();
+        // lantern-paper's setup in wallpaper.json, if it has one.
+        [[nodiscard]] std::optional<desktop::WallpaperSetup>                   paperSetup() const;
         // The wallpaper the chosen program keeps: hyprpaper.conf's, or what awww shows.
         [[nodiscard]] std::optional<desktop::Wallpaper>                        kept() const;
         // Shows the chosen wallpaper on the desktop through hyprpaper, writing nothing.
@@ -116,6 +121,7 @@ namespace ui {
         RowList                                                              diff;
         ProgramSwitch                                                        hyprpaper;
         ProgramSwitch                                                        awww;
+        ProgramSwitch                                                        paper;
         application::FileChooser                                             files;
         // An image to give awww once its daemon, just started by Apply, is running.
         std::optional<desktop::Wallpaper>                                    awwwAfterStart;

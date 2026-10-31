@@ -8,6 +8,7 @@ add_subdirectory(ipc)
 add_subdirectory(application)
 add_subdirectory(activation)
 add_subdirectory(ui)
+add_subdirectory(paper)
 
 add_executable(lantern-hyprland main.cpp)
 target_link_libraries(lantern-hyprland PRIVATE lantern-hyprland-ui)

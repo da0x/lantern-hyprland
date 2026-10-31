@@ -163,6 +163,15 @@ namespace desktop {
                 .found    = std::nullopt,
             };
             binary = "hyprpaper";
+        } else if (program == WallpaperProgram::lantern) {
+            requirement = Requirement{
+                .name     = "lantern-paper",
+                .purpose  = "Lantern's own wallpaper program, which shows a workspace's wallpaper the moment you switch to it.",
+                .upstream = "https://github.com/da0x/lantern-hyprland",
+                .package  = "lantern-hyprland",
+                .found    = std::nullopt,
+            };
+            binary = "lantern-paper";
         } else {
             requirement = Requirement{
                 .name     = "awww",
@@ -558,7 +567,98 @@ namespace desktop {
     }
 
     std::string_view loginCommand(WallpaperProgram program) {
-        return program == WallpaperProgram::awww ? "awww-daemon" : "hyprpaper";
+        switch (program) {
+            case WallpaperProgram::hyprpaper: return "hyprpaper";
+            case WallpaperProgram::awww: return "awww-daemon";
+            case WallpaperProgram::lantern: return "lantern-paper";
+        }
+        return "hyprpaper";
+    }
+
+    std::filesystem::path wallpaperSetupFile(const foundation::Environment& environment) {
+        return foundation::lanternFolder(environment) / "wallpaper.json";
+    }
+
+    std::filesystem::path tryWallpaperFile(const foundation::Environment& environment) {
+        return randomChoicesFile(environment).parent_path() / "lantern-paper-try.json";
+    }
+
+    namespace {
+
+        nlohmann::json wallpaperJson(const Wallpaper& wallpaper) {
+            std::string_view word = "cover";
+            for (const auto& info : fits)
+                if (info.mode == wallpaper.fit)
+                    word = info.word;
+            return {{"image", wallpaper.image.string()}, {"fit", std::string{word}}};
+        }
+
+        std::optional<Wallpaper> wallpaperFromJson(const nlohmann::json& json) {
+            if (!json.is_object() || !json.contains("image") || !json["image"].is_string())
+                return std::nullopt;
+            Wallpaper wallpaper{json["image"].get<std::string>(), FitMode::cover};
+            if (json.contains("fit") && json["fit"].is_string())
+                for (const auto& info : fits)
+                    if (info.word == json["fit"].get<std::string>())
+                        wallpaper.fit = info.mode;
+            return wallpaper;
+        }
+
+    }
+
+    std::string wallpaperSetupJson(const WallpaperSetup& setup) {
+        nlohmann::json json = wallpaperJson(setup.main);
+        if (!setup.perWorkspace.own.empty()) {
+            json["workspaces"] = nlohmann::json::object();
+            for (const auto& [number, wallpaper] : setup.perWorkspace.own)
+                json["workspaces"][std::to_string(number)] = wallpaperJson(wallpaper);
+        }
+        if (setup.perWorkspace.randomFrom)
+            json["random"] = setup.perWorkspace.randomFrom->string();
+        return json.dump(4) + "\n";
+    }
+
+    std::optional<WallpaperSetup> wallpaperSetupIn(std::string_view text) {
+        const auto json = nlohmann::json::parse(text, nullptr, false);
+        auto       main = wallpaperFromJson(json);
+        if (!main)
+            return std::nullopt;
+        WallpaperSetup setup{*main, {}};
+        if (json.contains("workspaces") && json["workspaces"].is_object())
+            for (const auto& [key, value] : json["workspaces"].items()) {
+                int        number = 0;
+                const auto parsed = std::from_chars(key.data(), key.data() + key.size(), number);
+                if (parsed.ec == std::errc{} && parsed.ptr == key.data() + key.size())
+                    if (const auto wallpaper = wallpaperFromJson(value))
+                        setup.perWorkspace.own[number] = *wallpaper;
+            }
+        if (json.contains("random") && json["random"].is_string())
+            setup.perWorkspace.randomFrom = json["random"].get<std::string>();
+        return setup;
+    }
+
+    std::optional<Wallpaper> wallpaperOfWorkspace(const WallpaperSetup& setup, int number, const std::map<int, std::filesystem::path>& choices) {
+        if (setup.perWorkspace.randomFrom) {
+            const auto chosen = choices.find(number);
+            if (chosen == choices.end())
+                return std::nullopt;
+            return Wallpaper{chosen->second, setup.main.fit};
+        }
+        if (const auto own = setup.perWorkspace.own.find(number); own != setup.perWorkspace.own.end())
+            return own->second;
+        return setup.main;
+    }
+
+    std::optional<std::filesystem::path> randomPick(const std::map<int, std::filesystem::path>& choices, std::span<const std::filesystem::path> images, std::uint_fast32_t seed) {
+        if (images.empty())
+            return std::nullopt;
+        std::vector<std::filesystem::path> unused;
+        for (const auto& image : images)
+            if (std::ranges::none_of(choices, [&image](const auto& entry) { return entry.second == image; }))
+                unused.push_back(image);
+        const auto&  from = unused.empty() ? std::vector<std::filesystem::path>{images.begin(), images.end()} : unused;
+        std::mt19937 random{seed};
+        return from[std::uniform_int_distribution<std::size_t>{0, from.size() - 1}(random)];
     }
 
     std::expected<std::vector<configuration::FileChange>, std::string> planWallpaperSetup(WallpaperProgram program, const Wallpaper& wallpaper,
@@ -579,8 +679,18 @@ namespace desktop {
         auto current = configuration::planFile(file, "");
         if (!current)
             return std::unexpected{current.error()};
-        const auto other = loginCommand(program == WallpaperProgram::awww ? WallpaperProgram::hyprpaper : WallpaperProgram::awww);
-        const std::array<std::string_view, 1> instead{other};
+        if (program == WallpaperProgram::lantern) {
+            auto setup = configuration::planFile(wallpaperSetupFile(environment), "");
+            if (!setup)
+                return std::unexpected{setup.error()};
+            setup->proposed = wallpaperSetupJson(WallpaperSetup{wallpaper, perWorkspace});
+            if (setup->changes())
+                changes.push_back(std::move(*setup));
+        }
+        std::vector<std::string_view> instead;
+        for (const auto other : {WallpaperProgram::hyprpaper, WallpaperProgram::awww, WallpaperProgram::lantern})
+            if (other != program)
+                instead.push_back(loginCommand(other));
         current->proposed = configuration::withAutostart(current->current.value_or(""), config.lua(), loginCommand(program), instead);
         // With a wallpaper program, Hyprland's own wallpaper and logo only show through when
         // the program changes images. Set where the config writes them; left alone otherwise.
@@ -589,7 +699,8 @@ namespace desktop {
                                               std::pair{std::vector<std::string_view>{"misc", "disable_hyprland_logo"}, std::string_view{"true"}}})
                 if (auto edited = configuration::withLuaConfigValue(current->proposed, path, value))
                     current->proposed = std::move(*edited);
-            if (perWorkspace.empty()) {
+            // lantern-paper follows the workspaces itself.
+            if (perWorkspace.empty() || program == WallpaperProgram::lantern) {
                 current->proposed = configuration::withLuaBlock(current->proposed, workspaceBlock, "", false);
             } else {
                 const auto block = workspaceWallpaperBlock(program, wallpaper, perWorkspace);
@@ -597,7 +708,7 @@ namespace desktop {
                     return std::unexpected{block.error()};
                 current->proposed = configuration::withLuaBlock(current->proposed, workspaceBlock, *block, true);
             }
-        } else if (!perWorkspace.empty()) {
+        } else if (!perWorkspace.empty() && program != WallpaperProgram::lantern) {
             return std::unexpected{"a wallpaper for each workspace needs a Lua config, hyprland.lua"};
         }
         if (current->changes())
@@ -704,6 +815,10 @@ namespace desktop {
     }
 
     std::optional<std::filesystem::path> shownWallpaperImage(const foundation::Environment& environment) {
+        if (!findProcesses("lantern-paper").empty())
+            if (const auto text = readFile(wallpaperSetupFile(environment)))
+                if (const auto setup = wallpaperSetupIn(*text))
+                    return setup->main.image;
         if (const auto awww = findProgram("awww", foundation::variable(environment, "PATH").value_or("")))
             if (const auto reply = readCommand(*awww, {"query", "-j"}))
                 if (auto image = awwwImage(*reply))

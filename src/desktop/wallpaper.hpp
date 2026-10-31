@@ -48,6 +48,9 @@ namespace desktop {
         hyprpaper,
         // Fades from one image to the next, and remembers the last one itself.
         awww,
+        // Lantern's own, lantern-paper, which keeps each workspace's image ready and
+        // shows it the moment the workspace does. Set through wallpaper.json.
+        lantern,
     };
 
     // The workspaces given a wallpaper of their own, by number.
@@ -128,6 +131,31 @@ namespace desktop {
     [[nodiscard]] std::map<int, std::filesystem::path> shuffledWorkspaces(std::span<const int> workspaces, std::span<const std::filesystem::path> images,
                                                                           std::uint_fast32_t seed);
 
+    // What lantern-paper shows.
+    struct WallpaperSetup {
+        Wallpaper    main;
+        PerWorkspace perWorkspace;
+
+        bool operator==(const WallpaperSetup&) const = default;
+    };
+
+    // wallpaper.json in Lantern's folder, which lantern-paper reads.
+    [[nodiscard]] std::filesystem::path wallpaperSetupFile(const foundation::Environment& environment);
+
+    [[nodiscard]] std::string                   wallpaperSetupJson(const WallpaperSetup& setup);
+    [[nodiscard]] std::optional<WallpaperSetup> wallpaperSetupIn(std::string_view json);
+
+    // An image `lantern-paper` shows on every monitor while it is there, for trying.
+    [[nodiscard]] std::filesystem::path tryWallpaperFile(const foundation::Environment& environment);
+
+    // The wallpaper workspace `number` shows: its own, its random image from `choices` with
+    // the main fit, or the main one. Nothing while a random one is still to be chosen.
+    [[nodiscard]] std::optional<Wallpaper> wallpaperOfWorkspace(const WallpaperSetup& setup, int number, const std::map<int, std::filesystem::path>& choices);
+
+    // A random image of `images` that no workspace in `choices` shows, while there is one.
+    [[nodiscard]] std::optional<std::filesystem::path> randomPick(const std::map<int, std::filesystem::path>& choices, std::span<const std::filesystem::path> images,
+                                                                  std::uint_fast32_t seed);
+
     // The command that starts the program at login.
     [[nodiscard]] std::string_view loginCommand(WallpaperProgram program);
 
@@ -138,6 +166,7 @@ namespace desktop {
     // that shows theirs, and without, loses it. A config that is a link is followed, and
     // the file it points at is the one changed; the link stays. Empty when nothing needs to
     // change.
+    // With lantern-paper, wallpaper.json has the whole setup, and the config no block.
     [[nodiscard]] std::expected<std::vector<configuration::FileChange>, std::string> planWallpaperSetup(WallpaperProgram program, const Wallpaper& wallpaper,
                                                                                                        const PerWorkspace&              perWorkspace,
                                                                                                        const configuration::MainConfig& config,
@@ -146,8 +175,8 @@ namespace desktop {
     // The fallback wallpaper hyprpaper.conf sets now.
     [[nodiscard]] std::optional<Wallpaper> currentWallpaper(const foundation::Environment& environment);
 
-    // The image on the desktop now: the one awww shows, or the one hyprpaper.conf sets. It
-    // asks awww, so it waits as long as `awww query` takes.
+    // The image on the desktop now: lantern-paper's main one, the one awww shows, or the
+    // one hyprpaper.conf sets. It asks awww, so it waits as long as `awww query` takes.
     [[nodiscard]] std::optional<std::filesystem::path> shownWallpaperImage(const foundation::Environment& environment);
 
     // Where the user's wallpapers are kept: Wallpapers in the pictures folder, which

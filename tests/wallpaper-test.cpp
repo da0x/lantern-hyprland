@@ -238,4 +238,46 @@ namespace {
         EXPECT_EQ(desktop::randomChoicesFile(foundation::Environment{{"XDG_RUNTIME_DIR", "/run/user/1000"}}), "/run/user/1000/lantern-workspace-wallpapers");
     }
 
+    TEST(Wallpaper, KeepsLanternPapersSetupInWallpaperJson) {
+        const desktop::WallpaperSetup own{Wallpaper{"/main.png", FitMode::contain}, {{{2, Wallpaper{"/two.jpg", FitMode::tile}}}, {}}};
+        EXPECT_EQ(desktop::wallpaperSetupIn(desktop::wallpaperSetupJson(own)), own);
+        const desktop::WallpaperSetup random{Wallpaper{"/main.png", FitMode::fill}, {{}, "/home/me/Pictures/Wallpapers"}};
+        EXPECT_EQ(desktop::wallpaperSetupIn(desktop::wallpaperSetupJson(random)), random);
+        EXPECT_FALSE(desktop::wallpaperSetupIn("not json").has_value());
+        EXPECT_EQ(desktop::wallpaperSetupFile(foundation::Environment{{"HOME", "/home/me"}}), "/home/me/.config/lantern-hyprland/wallpaper.json");
+
+        // A workspace shows its own, or the main one; with a folder, its random choice.
+        EXPECT_EQ(desktop::wallpaperOfWorkspace(own, 2, {}), (Wallpaper{"/two.jpg", FitMode::tile}));
+        EXPECT_EQ(desktop::wallpaperOfWorkspace(own, 3, {}), own.main);
+        EXPECT_EQ(desktop::wallpaperOfWorkspace(random, 1, {{1, "/a.png"}}), (Wallpaper{"/a.png", FitMode::fill}));
+        EXPECT_FALSE(desktop::wallpaperOfWorkspace(random, 2, {{1, "/a.png"}}).has_value());
+
+        // A new pick is one no workspace shows, while there is one.
+        const std::vector<std::filesystem::path> images{"/a.png", "/b.png"};
+        for (std::uint_fast32_t seed = 0; seed < 20; ++seed)
+            EXPECT_EQ(desktop::randomPick({{1, "/a.png"}}, images, seed), std::filesystem::path{"/b.png"});
+        EXPECT_TRUE(desktop::randomPick({{1, "/a.png"}, {2, "/b.png"}}, images, 3).has_value());
+        EXPECT_FALSE(desktop::randomPick({}, {}, 3).has_value());
+    }
+
+    TEST(Wallpaper, PlansLanternPaperWithWallpaperJsonAndNoBlock) {
+        static std::atomic<int> counter = 0;
+        const auto root = std::filesystem::temp_directory_path() / ("lantern-hyprland-paper-" + std::to_string(::getpid()) + "-" + std::to_string(counter++));
+        std::filesystem::create_directories(root / ".config/hypr");
+        const auto lua = configuration::withLuaBlock("hl.on(\"hyprland.start\", function ()\n    hl.exec_cmd(\"awww-daemon\")\nend)\n", "a wallpaper for each workspace", "do\nend\n", true);
+        std::ofstream{root / ".config/hypr/hyprland.lua"} << lua;
+        const foundation::Environment  environment{{"HOME", root.string()}};
+        const configuration::MainConfig config{.file = root / ".config/hypr/hyprland.lua", .choice = configuration::Choice::search, .safeMode = false};
+
+        const desktop::PerWorkspace random{{}, "/pictures"};
+        const auto planned = desktop::planWallpaperSetup(desktop::WallpaperProgram::lantern, Wallpaper{"/main.png", FitMode::cover}, random, config, environment);
+        ASSERT_TRUE(planned.has_value()) << planned.error();
+        ASSERT_EQ(planned->size(), 2U);
+        EXPECT_EQ((*planned)[0].file, root / ".config/lantern-hyprland/wallpaper.json");
+        EXPECT_EQ(desktop::wallpaperSetupIn((*planned)[0].proposed), (desktop::WallpaperSetup{Wallpaper{"/main.png", FitMode::cover}, random}));
+        // It starts at login instead of awww, and follows the workspaces without the block.
+        EXPECT_EQ((*planned)[1].proposed, "hl.on(\"hyprland.start\", function ()\n    hl.exec_cmd(\"lantern-paper\")\nend)\n");
+        std::filesystem::remove_all(root);
+    }
+
 }

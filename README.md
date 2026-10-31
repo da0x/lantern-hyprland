@@ -82,8 +82,11 @@ Each page does one thing. The sidebar groups them by what they are for.
   colors by their hex values, or pick them from the screen with hyprpicker, and keep
   it beside the built-in ones.
 - **Wallpaper:** pick a picture from your Wallpapers folder or the system's, see it on
-  the desktop at once, and keep it with hyprpaper or awww. A picture of yours you no
-  longer want goes to the trash, where your file manager can bring it back.
+  the desktop at once, and keep it with hyprpaper, awww, or Lantern's own
+  lantern-paper. Each workspace can have a picture of its own, or a random one from a
+  folder that it keeps until you log out or shuffle. lantern-paper keeps every
+  workspace's picture ready, so it changes the moment you switch. A picture of yours you
+  no longer want goes to the trash, where your file manager can bring it back.
 - **Windows:** corners, gaps, border thickness, whether dragging a border resizes, and
   whether open and save dialogs float, with a preview of your screen. The bar's corners
   and gaps follow the windows'.
@@ -185,7 +188,7 @@ This is everything Lantern touches. Nothing else is read, written or started.
   distribution.
 - **Wallpaper page:** the pictures in your Wallpapers folder (`~/Pictures/Wallpapers`),
   `~/.local/share/backgrounds`, `/usr/share/hypr` and `/usr/share/backgrounds`, and
-  `hyprpaper.conf`, or which picture awww shows.
+  `hyprpaper.conf`, which picture awww shows, or lantern-paper's `wallpaper.json`.
 - **Terminal page and the Inspect page's Console:** kitty's `kitty.conf` and `current-theme.conf`. For the
   preview of a see-through terminal, the Terminal page asks awww which picture it shows.
 - **Displays page:** each display Hyprland knows, with the modes it offers, from
@@ -224,9 +227,13 @@ writes the file it points to, and the review says which one.
   them, a `gtk.css` for GTK 3 and one for GTK 4 that give GTK apps the palette, GTK 3's
   dark or light preference in `settings.ini`, and GTK's dark or light preference and
   accent color in GNOME's settings.
-- **Wallpaper:** `hyprpaper.conf`, and the lines in your Hyprland config that start the
-  wallpaper program at login and turn off Hyprland's own wallpaper. A picture you add
-  is copied into your wallpapers folder under a new random name.
+- **Wallpaper:** `hyprpaper.conf`, or for lantern-paper, `wallpaper.json` in Lantern's
+  folder, and the lines in your Hyprland config that start the wallpaper program at login
+  and turn off Hyprland's own wallpaper. With hyprpaper or awww, pictures for each
+  workspace are a marked block in `hyprland.lua` that tells the program which picture to
+  show when you switch. The random pictures chosen for this session are kept in
+  `$XDG_RUNTIME_DIR`, which is emptied when you log out. A picture you add is copied into
+  your wallpapers folder under a new random name.
 - **Windows:** the corners, gaps, border size and resizing in your Hyprland config, a
   window rule named `float-file-pickers` for the portal's open and save dialogs, and
   Waybar's files, so the bar keeps matching.
@@ -302,7 +309,7 @@ There are no caches and no exports. Copying goes to the clipboard.
 
 ### Starts and stops
 
-- **Waybar, hyprpaper and awww,** only when you press their On or Off switch. If one is
+- **Waybar, hyprpaper, awww and lantern-paper,** only when you press their On or Off switch. If one is
   running when Lantern writes its files, Lantern restarts it so it reads them.
 - **A wallpaper preview.** Picking a picture shows it straight away, without writing
   anything, and leaving the page puts back the one you applied. Applying makes the

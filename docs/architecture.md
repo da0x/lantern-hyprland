@@ -37,6 +37,13 @@ below.
 `foundation`, `lua` and `configuration` use no UI library; the build fails if one is
 linked. hyprtoolkit's `CMyClass` naming stays inside `ui`.
 
+There are two programs. `lantern-hyprland` is the app, built on `ui`. `lantern-paper`, in
+`src/paper`, is the wallpaper program the Wallpaper page can choose: it uses `desktop` and
+`ipc`, draws on Hyprland's background layer through the wlr layer shell, decodes images
+with hyprgraphics and scales them with cairo on a thread of its own, and keeps each
+workspace's picture drawn so that a switch only attaches a ready buffer. It reads
+`wallpaper.json` in Lantern's folder and follows Hyprland's event socket.
+
 ## Threading
 
 - hyprtoolkit's main loop owns the UI. The event socket is non-blocking and watched with
@@ -88,11 +95,14 @@ The effects themselves are kept in `~/.config/lantern-hyprland/effects.lua`, as 
 
 ## What Lantern writes
 
-Only `~/.config/lantern-hyprland/`: `settings.conf` (hyprlang format), `effects.lua`, and
-the theme restore record while the theme area is active. The app can delete the folder.
+Only `~/.config/lantern-hyprland/`: `settings.conf` (hyprlang format), `effects.lua`,
+`wallpaper.json` for lantern-paper, and the theme restore record while the theme area is
+active. The random wallpapers chosen for the session go in `$XDG_RUNTIME_DIR`. The app can delete the folder.
 
 ## Libraries
 
 All packaged by distributions: hyprtoolkit, GLib's GIO for GSettings (already used by
-hyprtoolkit), Lua 5.5, nlohmann-json, tree-sitter with its Lua grammar (for editing), and
-GoogleTest for tests. The build follows `AGENTS.md`'s *Packageable as is*.
+hyprtoolkit), Lua 5.5, nlohmann-json, tree-sitter with its Lua grammar (for editing),
+wayland-client, cairo and hyprgraphics for lantern-paper, and GoogleTest for tests. The
+wlr layer shell protocol is kept in `protocols/`, since distributions package it only as
+a build file of other projects. The build follows `AGENTS.md`'s *Packageable as is*.
