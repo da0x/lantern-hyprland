@@ -2,8 +2,8 @@
 // lantern-paper, Lantern's own wallpaper program. It draws the wallpaper on Hyprland's
 // background layer, keeps each workspace's image drawn and ready, and listens to
 // Hyprland's events, so a workspace's wallpaper shows the moment the workspace does.
-// It reads wallpaper.json in Lantern's folder, and in $XDG_RUNTIME_DIR the session's
-// random choices and an image being tried.
+// It reads wallpaper.json in Lantern's folder, and in $XDG_RUNTIME_DIR the random choices
+// made since it started and an image being tried.
 
 #include "desktop/wallpaper.hpp"
 #include "foundation/environment.hpp"
@@ -241,7 +241,8 @@ namespace {
             events.emplace(std::move(*connection));
             watchFiles();
             readSetup();
-            readChoices();
+            // A new random set each time it starts, as at login, rather than the last one's.
+            saveChoices();
             readTry();
             askHyprland(true);
             show();

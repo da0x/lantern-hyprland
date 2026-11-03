@@ -84,7 +84,7 @@ Each page does one thing. The sidebar groups them by what they are for.
 - **Wallpaper:** pick a picture from your Wallpapers folder or the system's, see it on
   the desktop at once, and keep it with hyprpaper, awww, or Lantern's own
   lantern-paper. Each workspace can have a picture of its own, or a random one from a
-  folder that it keeps until you log out or shuffle. lantern-paper keeps every
+  folder: a new set each time you log in, kept until you shuffle. lantern-paper keeps every
   workspace's picture ready, so it changes the moment you switch. A picture of yours you
   no longer want goes to the trash, where your file manager can bring it back.
 - **Windows:** corners, gaps, border thickness, whether dragging a border resizes, and
