@@ -85,7 +85,10 @@ Each page does one thing. The sidebar groups them by what they are for.
   the desktop at once, and keep it with hyprpaper, awww, or Lantern's own
   lantern-paper. Each workspace can have a picture of its own, or a random one from a
   folder: a new set each time you log in, kept until you shuffle. lantern-paper keeps every
-  workspace's picture ready, so it changes the moment you switch. A picture of yours you
+  workspace's picture ready, so it changes the moment you switch. With
+  [hyprmural](https://github.com/da0x/hyprmural), a Hyprland plugin you install on your
+  own, pictures from a folder are pinned over lantern-paper's wallpaper and move out of
+  the way of floating windows; Lantern finds it and sets it up. A picture of yours you
   no longer want goes to the trash, where your file manager can bring it back.
 - **Windows:** corners, gaps, border thickness, whether dragging a border resizes, and
   whether open and save dialogs float, with a preview of your screen. The bar's corners
@@ -238,7 +241,8 @@ writes the file it points to, and the review says which one.
   folder, and the lines in your Hyprland config that start the wallpaper program at login
   and turn off Hyprland's own wallpaper. With hyprpaper or awww, pictures for each
   workspace are a marked block in `hyprland.lua` that tells the program which picture to
-  show when you switch. The random pictures chosen for this session are kept in
+  show when you switch. hyprmural is another marked block there, which loads the plugin
+  and names its folder. The random pictures chosen for this session are kept in
   `$XDG_RUNTIME_DIR`, which is emptied when you log out. A picture you add is copied into
   your wallpapers folder under a new random name.
 - **Windows:** the corners, gaps, border size and resizing in your Hyprland config, a

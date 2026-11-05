@@ -51,7 +51,16 @@ namespace desktop {
         // Lantern's own, lantern-paper, which keeps each workspace's image ready and
         // shows it the moment the workspace does. Set through wallpaper.json.
         lantern,
+        // lantern-paper's wallpaper with hyprmural over it: a Hyprland plugin, installed on
+        // its own, that pins pictures from a folder and moves them out of floating
+        // windows' way. Set through wallpaper.json and a block in hyprland.lua.
+        mural,
     };
+
+    // Whether lantern-paper draws the wallpaper: on its own, or under hyprmural.
+    [[nodiscard]] constexpr bool drawnByPaper(WallpaperProgram program) {
+        return program == WallpaperProgram::lantern || program == WallpaperProgram::mural;
+    }
 
     // The workspaces given a wallpaper of their own, by number.
     using WorkspaceWallpapers = std::map<int, Wallpaper>;
@@ -67,8 +76,22 @@ namespace desktop {
         bool               operator==(const PerWorkspace&) const = default;
     };
 
-    // What the program needs: itself.
+    // What the program needs: itself. For hyprmural, the plugin's file.
     [[nodiscard]] Requirement wallpaperRequirement(WallpaperProgram program, const foundation::Environment& environment);
+
+    // Where hyprmural's plugin is looked for, in order: where a package puts it, where its
+    // `sudo cmake --install` puts it, and under the home folder.
+    [[nodiscard]] std::vector<std::filesystem::path> muralPluginCandidates(const foundation::Environment& environment);
+
+    // The first of those that exists.
+    [[nodiscard]] std::optional<std::filesystem::path> muralPluginFile(const foundation::Environment& environment);
+
+    // The Lua that loads hyprmural from `plugin` and has it pin pictures from `folder`.
+    // Refuses a path with a quote or a backslash.
+    [[nodiscard]] std::expected<std::string, std::string> muralBlock(const std::filesystem::path& plugin, const std::filesystem::path& folder);
+
+    // The folder the hyprmural block in a Lua config takes pictures from, if it has the block.
+    [[nodiscard]] std::optional<std::filesystem::path> muralFolderIn(std::string_view config);
 
     // The arguments that make `awww` show `wallpaper` on every monitor, fading in. awww
     // remembers it and shows it again when its daemon starts. Refuses the tile fit, which
@@ -167,8 +190,11 @@ namespace desktop {
     // the file it points at is the one changed; the link stays. Empty when nothing needs to
     // change.
     // With lantern-paper, wallpaper.json has the whole setup, and the config no block.
+    // With hyprmural, the same, and a Lua config gets the block that loads it with pictures
+    // from `muralFolder`; with any other program, it loses that block.
     [[nodiscard]] std::expected<std::vector<configuration::FileChange>, std::string> planWallpaperSetup(WallpaperProgram program, const Wallpaper& wallpaper,
                                                                                                        const PerWorkspace&              perWorkspace,
+                                                                                                       const std::filesystem::path&     muralFolder,
                                                                                                        const configuration::MainConfig& config,
                                                                                                        const foundation::Environment&   environment);
 

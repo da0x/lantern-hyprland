@@ -21,7 +21,7 @@ namespace desktop {
         // Why the bar needs it.
         std::string                purpose;
         std::string                upstream;
-        // Its package on Arch Linux.
+        // Its package on Arch Linux, or empty for one installed from its repository.
         std::string                package;
         // Where it was found, or nothing when it is missing.
         std::optional<std::string> found;
@@ -30,7 +30,7 @@ namespace desktop {
     };
 
     // The command that installs it, for the user to run. Empty on a distribution whose
-    // packages Lantern does not know.
+    // packages Lantern does not know, and for one with no package.
     [[nodiscard]] std::string installCommand(const Requirement& requirement, const Distribution& distribution);
 
     // Waybar itself, and the font its icons come from.

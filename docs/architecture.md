@@ -42,7 +42,10 @@ There are two programs. `lantern-hyprland` is the app, built on `ui`. `lantern-p
 `ipc`, draws on Hyprland's background layer through the wlr layer shell, decodes images
 with hyprgraphics and scales them with cairo on a thread of its own, and keeps each
 workspace's picture drawn so that a switch only attaches a ready buffer. It reads
-`wallpaper.json` in Lantern's folder and follows Hyprland's event socket.
+`wallpaper.json` in Lantern's folder and follows Hyprland's event socket. hyprmural, a
+Hyprland plugin with a repository of its own, is not built here: the Wallpaper page looks
+for its file where a package or its install puts it, and loads it from a marked block in
+`hyprland.lua`.
 
 ## Threading
 

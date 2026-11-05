@@ -160,7 +160,7 @@ namespace {
         const foundation::Environment     environment{{"HOME", (root / "home").string()}};
         const configuration::MainConfig    config{.file = root / "home/.config/hypr/hyprland.lua", .choice = configuration::Choice::search, .safeMode = false};
 
-        const auto planned = desktop::planWallpaperSetup(desktop::WallpaperProgram::hyprpaper, Wallpaper{"/usr/share/hypr/wall2.png", FitMode::cover}, {}, config, environment);
+        const auto planned = desktop::planWallpaperSetup(desktop::WallpaperProgram::hyprpaper, Wallpaper{"/usr/share/hypr/wall2.png", FitMode::cover}, {}, {}, config, environment);
         ASSERT_TRUE(planned.has_value()) << planned.error();
         ASSERT_EQ(planned->size(), 2U);
         EXPECT_EQ((*planned)[0].file, root / "home/.config/hypr/hyprpaper.conf");
@@ -169,13 +169,13 @@ namespace {
         EXPECT_EQ((*planned)[1].proposed, "hl.on(\"hyprland.start\", function ()\n    hl.exec_cmd(\"hyprpaper\")\nend)\n");
 
         // awww needs only the config, and with it already started, nothing at all.
-        const auto withAwww = desktop::planWallpaperSetup(desktop::WallpaperProgram::awww, Wallpaper{"/a.png", FitMode::cover}, {}, config, environment);
+        const auto withAwww = desktop::planWallpaperSetup(desktop::WallpaperProgram::awww, Wallpaper{"/a.png", FitMode::cover}, {}, {}, config, environment);
         ASSERT_TRUE(withAwww.has_value());
         EXPECT_TRUE(withAwww->empty());
 
         // Workspaces of their own add the block that shows them, which reads back.
         const desktop::WorkspaceWallpapers workspaces{{1, Wallpaper{"/one.png", FitMode::cover}}, {3, Wallpaper{"/three.jpg", FitMode::contain}}};
-        const auto withWorkspaces = desktop::planWallpaperSetup(desktop::WallpaperProgram::awww, Wallpaper{"/a.png", FitMode::fill}, {workspaces, {}}, config, environment);
+        const auto withWorkspaces = desktop::planWallpaperSetup(desktop::WallpaperProgram::awww, Wallpaper{"/a.png", FitMode::fill}, {workspaces, {}}, {}, config, environment);
         ASSERT_TRUE(withWorkspaces.has_value()) << withWorkspaces.error();
         ASSERT_EQ(withWorkspaces->size(), 1U);
         const auto& proposed = (*withWorkspaces)[0].proposed;
@@ -183,7 +183,7 @@ namespace {
         EXPECT_EQ(desktop::restWallpaperIn(proposed), (Wallpaper{"/a.png", FitMode::fill}));
         std::ofstream{root / "dotfiles/hyprland.lua"} << proposed;
         // And without them, the block goes, leaving the config as it was.
-        const auto without = desktop::planWallpaperSetup(desktop::WallpaperProgram::awww, Wallpaper{"/a.png", FitMode::fill}, {}, config, environment);
+        const auto without = desktop::planWallpaperSetup(desktop::WallpaperProgram::awww, Wallpaper{"/a.png", FitMode::fill}, {}, {}, config, environment);
         ASSERT_TRUE(without.has_value());
         ASSERT_EQ(without->size(), 1U);
         EXPECT_EQ((*without)[0].proposed, "hl.on(\"hyprland.start\", function ()\n    hl.exec_cmd(\"awww-daemon\")\nend)\n");
@@ -270,13 +270,54 @@ namespace {
         const configuration::MainConfig config{.file = root / ".config/hypr/hyprland.lua", .choice = configuration::Choice::search, .safeMode = false};
 
         const desktop::PerWorkspace random{{}, "/pictures"};
-        const auto planned = desktop::planWallpaperSetup(desktop::WallpaperProgram::lantern, Wallpaper{"/main.png", FitMode::cover}, random, config, environment);
+        const auto planned = desktop::planWallpaperSetup(desktop::WallpaperProgram::lantern, Wallpaper{"/main.png", FitMode::cover}, random, {}, config, environment);
         ASSERT_TRUE(planned.has_value()) << planned.error();
         ASSERT_EQ(planned->size(), 2U);
         EXPECT_EQ((*planned)[0].file, root / ".config/lantern-hyprland/wallpaper.json");
         EXPECT_EQ(desktop::wallpaperSetupIn((*planned)[0].proposed), (desktop::WallpaperSetup{Wallpaper{"/main.png", FitMode::cover}, random}));
         // It starts at login instead of awww, and follows the workspaces without the block.
         EXPECT_EQ((*planned)[1].proposed, "hl.on(\"hyprland.start\", function ()\n    hl.exec_cmd(\"lantern-paper\")\nend)\n");
+        std::filesystem::remove_all(root);
+    }
+
+    TEST(Wallpaper, PlansHyprmuralOverLanternPaperAndTakesItAwayAgain) {
+        static std::atomic<int> counter = 0;
+        const auto root = std::filesystem::temp_directory_path() / ("lantern-hyprland-mural-" + std::to_string(::getpid()) + "-" + std::to_string(counter++));
+        std::filesystem::create_directories(root / ".config/hypr");
+        const std::string start = "hl.on(\"hyprland.start\", function ()\n    hl.exec_cmd(\"lantern-paper\")\nend)\n";
+        std::ofstream{root / ".config/hypr/hyprland.lua"} << start;
+        const foundation::Environment  environment{{"HOME", root.string()}};
+        const configuration::MainConfig config{.file = root / ".config/hypr/hyprland.lua", .choice = configuration::Choice::search, .safeMode = false};
+        const Wallpaper                 main{"/main.png", FitMode::cover};
+
+        // Until the plugin is installed, it cannot be set up.
+        EXPECT_FALSE(desktop::wallpaperRequirement(desktop::WallpaperProgram::mural, environment).met());
+        EXPECT_FALSE(desktop::planWallpaperSetup(desktop::WallpaperProgram::mural, main, {}, "/pictures", config, environment).has_value());
+
+        const auto plugin = root / ".local/lib/hyprmural/hyprmural.so";
+        std::filesystem::create_directories(plugin.parent_path());
+        std::ofstream{plugin} << "";
+        EXPECT_EQ(desktop::muralPluginFile(environment), plugin);
+        EXPECT_TRUE(desktop::wallpaperRequirement(desktop::WallpaperProgram::mural, environment).met());
+
+        const auto planned = desktop::planWallpaperSetup(desktop::WallpaperProgram::mural, main, {}, "/pictures", config, environment);
+        ASSERT_TRUE(planned.has_value()) << planned.error();
+        ASSERT_EQ(planned->size(), 2U);
+        // lantern-paper still draws the wallpaper, and keeps starting at login.
+        EXPECT_EQ((*planned)[0].file, root / ".config/lantern-hyprland/wallpaper.json");
+        const auto& proposed = (*planned)[1].proposed;
+        EXPECT_TRUE(proposed.starts_with(start));
+        EXPECT_TRUE(proposed.contains(std::format("hl.plugin.load(\"{}\")", plugin.string())));
+        EXPECT_EQ(desktop::muralFolderIn(proposed), std::filesystem::path{"/pictures"});
+
+        // Choosing lantern-paper alone takes the block away again.
+        std::ofstream{root / ".config/hypr/hyprland.lua"} << proposed;
+        const auto alone = desktop::planWallpaperSetup(desktop::WallpaperProgram::lantern, main, {}, "/pictures", config, environment);
+        ASSERT_TRUE(alone.has_value()) << alone.error();
+        ASSERT_FALSE(alone->empty());
+        EXPECT_EQ(alone->back().proposed, start);
+        EXPECT_FALSE(desktop::muralFolderIn(alone->back().proposed).has_value());
+        EXPECT_FALSE(desktop::muralBlock(plugin, "/a \"quoted\" folder").has_value());
         std::filesystem::remove_all(root);
     }
 

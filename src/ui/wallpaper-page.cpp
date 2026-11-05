@@ -89,6 +89,7 @@ namespace ui {
                 case desktop::WallpaperProgram::hyprpaper: return "hyprpaper";
                 case desktop::WallpaperProgram::awww: return "awww";
                 case desktop::WallpaperProgram::lantern: return "lantern-paper";
+                case desktop::WallpaperProgram::mural: return "hyprmural";
             }
             return "hyprpaper";
         }
@@ -131,7 +132,8 @@ namespace ui {
         root->setMargin(28);
         root->addChild(pageTitle("Wallpaper", this->palette));
         root->addChild(paragraph("The wallpaper is drawn by hyprpaper, Hyprland's own wallpaper program, by awww, which fades between images, or by "
-                                 "lantern-paper, Lantern's own, which changes a workspace's wallpaper the moment you switch to it. It never installs "
+                                 "lantern-paper, Lantern's own, which changes a workspace's wallpaper the moment you switch to it. With hyprmural, lantern-paper draws it and "
+                                 "pictures are pinned over it, moving out of the way of floating windows. Lantern never installs "
                                  "anything: when something is missing, it shows the command for you to run.",
                                  this->palette));
         body = Hyprtoolkit::CColumnLayoutBuilder::begin()->gap(10)->size(CDynamicSize{CDynamicSize::HT_SIZE_PERCENT, CDynamicSize::HT_SIZE_ABSOLUTE, {1.0, 1.0}})->commence();
@@ -147,6 +149,8 @@ namespace ui {
         // Until the user chooses: awww if only it is installed, otherwise hyprpaper.
         if (settings.wallpaperProgram == "lantern-paper")
             program = desktop::WallpaperProgram::lantern;
+        else if (settings.wallpaperProgram == "hyprmural")
+            program = desktop::WallpaperProgram::mural;
         else if (settings.wallpaperProgram == "awww" ||
             (settings.wallpaperProgram.empty() && desktop::wallpaperRequirement(desktop::WallpaperProgram::awww, environment).met() &&
              !desktop::wallpaperRequirement(desktop::WallpaperProgram::hyprpaper, environment).met()))
@@ -169,7 +173,8 @@ namespace ui {
         switch (of) {
             case desktop::WallpaperProgram::hyprpaper: return hyprpaper;
             case desktop::WallpaperProgram::awww: return awww;
-            case desktop::WallpaperProgram::lantern: return paper;
+            case desktop::WallpaperProgram::lantern:
+            case desktop::WallpaperProgram::mural: return paper;
         }
         return hyprpaper;
     }
@@ -177,7 +182,7 @@ namespace ui {
     std::vector<desktop::WallpaperProgram> WallpaperPage::othersRunning() {
         std::vector<desktop::WallpaperProgram> running;
         for (const auto other : {desktop::WallpaperProgram::hyprpaper, desktop::WallpaperProgram::awww, desktop::WallpaperProgram::lantern})
-            if (other != program && switchOf(other).running())
+            if (&switchOf(other) != &current() && switchOf(other).running())
                 running.push_back(other);
         return running;
     }
@@ -199,7 +204,7 @@ namespace ui {
     std::optional<desktop::Wallpaper> WallpaperPage::kept() const {
         if (program == desktop::WallpaperProgram::awww)
             return configRest ? configRest : awwwShows;
-        if (program == desktop::WallpaperProgram::lantern) {
+        if (desktop::drawnByPaper(program)) {
             const auto setup = paperSetup();
             return setup ? std::optional{setup->main} : std::nullopt;
         }
@@ -244,7 +249,7 @@ namespace ui {
         if (!tried)
             return;
         tried = false;
-        if (program == desktop::WallpaperProgram::lantern) {
+        if (desktop::drawnByPaper(program)) {
             std::error_code error;
             std::filesystem::remove(desktop::tryWallpaperFile(foundation::currentEnvironment()), error);
             if (!workspace)
@@ -272,7 +277,7 @@ namespace ui {
     }
 
     void WallpaperPage::tryOnDesktop() {
-        if (program == desktop::WallpaperProgram::lantern) {
+        if (desktop::drawnByPaper(program)) {
             if (!paper.running() || !selected)
                 return;
             tried = selected != kept();
@@ -484,7 +489,7 @@ namespace ui {
         const auto environment = foundation::currentEnvironment();
         const bool awwwChosen  = program == desktop::WallpaperProgram::awww;
         const auto config      = configuration::mainConfig(configuration::lanternLaunch());
-        const auto planned     = config ? desktop::planWallpaperSetup(program, mainWallpaper(), perWorkspace(), *config, environment)
+        const auto planned     = config ? desktop::planWallpaperSetup(program, mainWallpaper(), perWorkspace(), muralFolder, *config, environment)
                                         : std::expected<std::vector<configuration::FileChange>, std::string>{std::unexpect, config.error()};
         // With workspaces of their own, awww shows the active one's, not every workspace's.
         const bool shows       = awwwChosen ? awww.running() && (!perWorkspace().empty() || mainWallpaper() == awwwShows) : current().running();
@@ -673,7 +678,7 @@ namespace ui {
         label->rebuild()->size(CDynamicSize{CDynamicSize::HT_SIZE_ABSOLUTE, CDynamicSize::HT_SIZE_AUTO, {90.0, 1.0}})->commence();
         programs->addChild(label);
         programs->addChild(Hyprtoolkit::CComboboxBuilder::begin()
-                               ->items({"hyprpaper", "awww", "lantern-paper"})
+                               ->items({"hyprpaper", "awww", "lantern-paper", "hyprmural"})
                                ->currentItem(static_cast<std::size_t>(program))
                                ->onChanged([this](CSharedPointer<Hyprtoolkit::CComboboxElement>, std::size_t index) {
                                    defer([this, index] { choose(static_cast<desktop::WallpaperProgram>(index)); });
@@ -686,6 +691,16 @@ namespace ui {
         programs->addChild(workspaceRow);
         fillWorkspaces();
         body->addChild(programs);
+
+        if (program == desktop::WallpaperProgram::mural) {
+            const auto pictures = leftRow();
+            const auto text     = markupLine(std::format("<span weight=\"600\">Pictures</span>   pinned over the wallpaper from {}", escapeMarkup(shortPath(muralFolder))),
+                                             palette);
+            text->rebuild()->size(CDynamicSize{CDynamicSize::HT_SIZE_AUTO, CDynamicSize::HT_SIZE_AUTO, {1.0, 1.0}})->commence();
+            pictures->addChild(text);
+            pictures->addChild(button("Choose folder…", 150, false, [this] { defer([this] { chooseMuralFolder(); }); }));
+            body->addChild(pictures);
+        }
 
         // Two wallpaper programs at once draw over each other.
         for (const auto other : othersRunning()) {
@@ -761,7 +776,7 @@ namespace ui {
     void WallpaperPage::showReview() {
         const auto environment = foundation::currentEnvironment();
         const auto config      = configuration::mainConfig(configuration::lanternLaunch());
-        auto       planned     = config ? desktop::planWallpaperSetup(program, mainWallpaper(), perWorkspace(), *config, environment)
+        auto       planned     = config ? desktop::planWallpaperSetup(program, mainWallpaper(), perWorkspace(), muralFolder, *config, environment)
                                         : std::expected<std::vector<configuration::FileChange>, std::string>{std::unexpect, config.error()};
         if (!planned) {
             outcome = planned.error();
@@ -783,8 +798,12 @@ namespace ui {
             steps.push_back(std::format("Start {}.", name));
         else if (program == desktop::WallpaperProgram::hyprpaper && !changes.empty())
             steps.emplace_back("Restart hyprpaper, so it reads hyprpaper.conf.");
-        else if (program == desktop::WallpaperProgram::lantern && !changes.empty())
+        else if (desktop::drawnByPaper(program) && !changes.empty())
             steps.emplace_back("lantern-paper reads the new wallpaper.json at once.");
+        if (program == desktop::WallpaperProgram::mural)
+            steps.push_back(std::format("Load hyprmural when Hyprland reads its config, pinning pictures from {} over the wallpaper.", shortPath(muralFolder)));
+        else if (muralInConfig)
+            steps.emplace_back("Unload hyprmural, so its pictures go away.");
         if (awwwChosen)
             steps.emplace_back("Give awww the image. awww shows it again whenever it starts.");
         if (randomFrom) {
@@ -828,20 +847,27 @@ namespace ui {
             record = *written;
         }
         tried      = false;
-        configRest = perWorkspace().empty() || program == desktop::WallpaperProgram::lantern ? std::nullopt : std::optional{mainWallpaper()};
+        configRest = perWorkspace().empty() || desktop::drawnByPaper(program) ? std::nullopt : std::optional{mainWallpaper()};
         for (const auto other : othersRunning())
             switchOf(other).turnOff();
 
-        if (program == desktop::WallpaperProgram::lantern) {
+        // Taking the block out of the config leaves the plugin loaded until Hyprland is told.
+        if (muralInConfig && program != desktop::WallpaperProgram::mural && hyprctl)
+            if (const auto plugin = desktop::muralPluginFile(foundation::currentEnvironment()))
+                (void)application::runCommand(loop, *hyprctl, {"plugin", "unload", plugin->string()}, [](bool, std::string) {});
+        muralInConfig = program == desktop::WallpaperProgram::mural;
+
+        if (desktop::drawnByPaper(program)) {
             std::error_code error;
             std::filesystem::remove(desktop::tryWallpaperFile(foundation::currentEnvironment()), error);
             if (randomFrom)
                 shuffle();
+            const auto with = program == desktop::WallpaperProgram::mural ? std::string{", with hyprmural's pictures over it,"} : std::string{};
             if (paper.running()) {
-                outcome = "Applied. lantern-paper shows it, and starts when you log in.";
+                outcome = std::format("Applied. lantern-paper shows it{} and starts when you log in.", with);
             } else {
                 paper.turnOn();
-                outcome = "Applied. lantern-paper is starting with it, and starts when you log in.";
+                outcome = std::format("Applied. lantern-paper is starting with it{} and starts when you log in.", with);
             }
         } else if (awwwChosen) {
             settings.awwwFit = std::string{wordOf(mainWallpaper().fit)};
@@ -949,13 +975,24 @@ namespace ui {
         configRest.reset();
         randomFrom.reset();
         luaConfig         = false;
-        if (program == desktop::WallpaperProgram::lantern)
+        muralInConfig     = false;
+        muralFolder       = desktop::wallpaperFolder(foundation::currentEnvironment());
+        if (const auto config = configuration::mainConfig(configuration::lanternLaunch()); config && config->lua()) {
+            std::ifstream     file{config->file};
+            std::stringstream text;
+            text << file.rdbuf();
+            if (const auto folder = desktop::muralFolderIn(text.str())) {
+                muralFolder   = *folder;
+                muralInConfig = true;
+            }
+        }
+        if (desktop::drawnByPaper(program))
             if (const auto setup = paperSetup()) {
                 workspaces = setup->perWorkspace.own;
                 randomFrom = setup->perWorkspace.randomFrom;
             }
         const auto config = configuration::mainConfig(configuration::lanternLaunch());
-        if (!config || !config->lua() || program == desktop::WallpaperProgram::lantern) {
+        if (!config || !config->lua() || desktop::drawnByPaper(program)) {
             luaConfig = config && config->lua();
             return;
         }
@@ -975,7 +1012,7 @@ namespace ui {
         workspaceRow->clearChildren();
         // Hyprland runs code when a workspace becomes active only from a Lua config;
         // lantern-paper follows the workspaces itself.
-        if ((!luaConfig && program != desktop::WallpaperProgram::lantern) || !selected)
+        if ((!luaConfig && !desktop::drawnByPaper(program)) || !selected)
             return;
         workspaceRow->addChild(button("Every workspace", 160, !workspace && !randomFrom, [this] { defer([this] { pickWorkspace(std::nullopt); }); }));
         // A random image each, so none is picked by number.
@@ -1057,7 +1094,7 @@ namespace ui {
     }
 
     void WallpaperPage::showActiveWorkspace() {
-        if (perWorkspace().empty() || !hyprctl || program == desktop::WallpaperProgram::lantern)
+        if (perWorkspace().empty() || !hyprctl || desktop::drawnByPaper(program))
             return;
         (void)application::runCommand(loop, *hyprctl, {"monitors", "-j"}, [this](bool succeeded, std::string output) {
             const auto json = succeeded ? nlohmann::json::parse(output, nullptr, false) : nlohmann::json{};
@@ -1128,6 +1165,20 @@ namespace ui {
         }
     }
 
+    void WallpaperPage::chooseMuralFolder() {
+        const auto opened = files.chooseFolder("Choose a folder of pictures", [this](std::optional<std::filesystem::path> chosen) {
+            if (!chosen)
+                return;
+            muralFolder = *chosen;
+            outcome.clear();
+            showOverview();
+        });
+        if (!opened) {
+            outcome = std::format("The file chooser did not open: {}.", opened.error());
+            showOverview();
+        }
+    }
+
     void WallpaperPage::shuffle() {
         if (!randomFrom || !hyprctl)
             return;
@@ -1144,7 +1195,7 @@ namespace ui {
             const auto file    = desktop::randomChoicesFile(foundation::currentEnvironment());
             std::ofstream{file} << desktop::randomChoicesText(chosen);
             // lantern-paper reads the new choices itself.
-            if (program != desktop::WallpaperProgram::lantern)
+            if (!desktop::drawnByPaper(program))
                 showActiveWorkspace();
         });
     }

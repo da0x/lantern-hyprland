@@ -24,6 +24,8 @@ namespace desktop {
 
     namespace {
 
+        constexpr auto muralBlockName = "hyprmural";
+
         constexpr std::array fits{
             FitInfo{FitMode::cover, "cover", "Cover"},
             FitInfo{FitMode::contain, "contain", "Contain"},
@@ -163,6 +165,18 @@ namespace desktop {
                 .found    = std::nullopt,
             };
             binary = "hyprpaper";
+        } else if (program == WallpaperProgram::mural) {
+            requirement = Requirement{
+                .name     = "hyprmural",
+                .purpose  = "A Hyprland plugin that pins pictures over lantern-paper's wallpaper and moves them out of the way of floating windows. "
+                            "It is installed on its own: build it from its repository and install it with sudo cmake --install build.",
+                .upstream = "https://github.com/da0x/hyprmural",
+                .package  = "",
+                .found    = std::nullopt,
+            };
+            if (const auto file = muralPluginFile(environment))
+                requirement.found = file->string();
+            return requirement;
         } else if (program == WallpaperProgram::lantern) {
             requirement = Requirement{
                 .name     = "lantern-paper",
@@ -570,9 +584,49 @@ namespace desktop {
         switch (program) {
             case WallpaperProgram::hyprpaper: return "hyprpaper";
             case WallpaperProgram::awww: return "awww-daemon";
-            case WallpaperProgram::lantern: return "lantern-paper";
+            case WallpaperProgram::lantern:
+            case WallpaperProgram::mural: return "lantern-paper";
         }
         return "hyprpaper";
+    }
+
+    std::vector<std::filesystem::path> muralPluginCandidates(const foundation::Environment& environment) {
+        return {"/usr/lib/hyprmural/hyprmural.so", "/usr/local/lib/hyprmural/hyprmural.so", homeOf(environment) / ".local" / "lib" / "hyprmural" / "hyprmural.so"};
+    }
+
+    std::optional<std::filesystem::path> muralPluginFile(const foundation::Environment& environment) {
+        for (const auto& candidate : muralPluginCandidates(environment)) {
+            std::error_code error;
+            if (std::filesystem::is_regular_file(candidate, error))
+                return candidate;
+        }
+        return std::nullopt;
+    }
+
+    std::expected<std::string, std::string> muralBlock(const std::filesystem::path& plugin, const std::filesystem::path& folder) {
+        for (const auto& path : {plugin.string(), folder.string()})
+            if (path.find_first_of("\"\\") != std::string::npos)
+                return std::unexpected{std::format("hyprmural cannot be given {}: it has a quote or a backslash", path)};
+        return std::format("hl.plugin.load(\"{}\")\n"
+                           "-- Checked, so the config still loads while the plugin is not.\n"
+                           "if hl.plugin.hyprmural then\n"
+                           "    hl.plugin.hyprmural.setup{{ folder = \"{}\" }}\n"
+                           "end\n",
+                           plugin.string(), folder.string());
+    }
+
+    std::optional<std::filesystem::path> muralFolderIn(std::string_view config) {
+        const auto block = configuration::luaBlock(config, muralBlockName);
+        if (!block)
+            return std::nullopt;
+        constexpr std::string_view key   = "folder = \"";
+        const auto                 start = block->find(key);
+        if (start == std::string_view::npos)
+            return std::nullopt;
+        const auto end = block->find('"', start + key.size());
+        if (end == std::string_view::npos)
+            return std::nullopt;
+        return std::filesystem::path{block->substr(start + key.size(), end - start - key.size())};
     }
 
     std::filesystem::path wallpaperSetupFile(const foundation::Environment& environment) {
@@ -662,7 +716,8 @@ namespace desktop {
     }
 
     std::expected<std::vector<configuration::FileChange>, std::string> planWallpaperSetup(WallpaperProgram program, const Wallpaper& wallpaper,
-                                                                                         const PerWorkspace& perWorkspace, const configuration::MainConfig& config, const foundation::Environment& environment) {
+                                                                                         const PerWorkspace& perWorkspace, const std::filesystem::path& muralFolder,
+                                                                                         const configuration::MainConfig& config, const foundation::Environment& environment) {
         std::vector<configuration::FileChange> changes;
         if (program == WallpaperProgram::hyprpaper) {
             auto change = planWallpaper(wallpaper, environment);
@@ -679,7 +734,7 @@ namespace desktop {
         auto current = configuration::planFile(file, "");
         if (!current)
             return std::unexpected{current.error()};
-        if (program == WallpaperProgram::lantern) {
+        if (drawnByPaper(program)) {
             auto setup = configuration::planFile(wallpaperSetupFile(environment), "");
             if (!setup)
                 return std::unexpected{setup.error()};
@@ -689,7 +744,7 @@ namespace desktop {
         }
         std::vector<std::string_view> instead;
         for (const auto other : {WallpaperProgram::hyprpaper, WallpaperProgram::awww, WallpaperProgram::lantern})
-            if (other != program)
+            if (loginCommand(other) != loginCommand(program))
                 instead.push_back(loginCommand(other));
         current->proposed = configuration::withAutostart(current->current.value_or(""), config.lua(), loginCommand(program), instead);
         // With a wallpaper program, Hyprland's own wallpaper and logo only show through when
@@ -700,7 +755,7 @@ namespace desktop {
                 if (auto edited = configuration::withLuaConfigValue(current->proposed, path, value))
                     current->proposed = std::move(*edited);
             // lantern-paper follows the workspaces itself.
-            if (perWorkspace.empty() || program == WallpaperProgram::lantern) {
+            if (perWorkspace.empty() || drawnByPaper(program)) {
                 current->proposed = configuration::withLuaBlock(current->proposed, workspaceBlock, "", false);
             } else {
                 const auto block = workspaceWallpaperBlock(program, wallpaper, perWorkspace);
@@ -708,8 +763,21 @@ namespace desktop {
                     return std::unexpected{block.error()};
                 current->proposed = configuration::withLuaBlock(current->proposed, workspaceBlock, *block, true);
             }
-        } else if (!perWorkspace.empty() && program != WallpaperProgram::lantern) {
+            if (program == WallpaperProgram::mural) {
+                const auto plugin = muralPluginFile(environment);
+                if (!plugin)
+                    return std::unexpected{"hyprmural is not installed"};
+                const auto block = muralBlock(*plugin, muralFolder);
+                if (!block)
+                    return std::unexpected{block.error()};
+                current->proposed = configuration::withLuaBlock(current->proposed, muralBlockName, *block, true);
+            } else {
+                current->proposed = configuration::withLuaBlock(current->proposed, muralBlockName, "", false);
+            }
+        } else if (!perWorkspace.empty() && !drawnByPaper(program)) {
             return std::unexpected{"a wallpaper for each workspace needs a Lua config, hyprland.lua"};
+        } else if (program == WallpaperProgram::mural) {
+            return std::unexpected{"hyprmural needs a Lua config, hyprland.lua"};
         }
         if (current->changes())
             changes.push_back(std::move(*current));

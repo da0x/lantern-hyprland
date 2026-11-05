@@ -15,7 +15,7 @@ namespace desktop {
     }
 
     std::string installCommand(const Requirement& requirement, const Distribution& distribution) {
-        if (!distribution.arch())
+        if (!distribution.arch() || requirement.package.empty())
             return {};
         return std::format("sudo pacman -S {}", requirement.package);
     }

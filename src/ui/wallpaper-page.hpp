@@ -28,7 +28,8 @@
 namespace ui {
 
     // The wallpaper, drawn by hyprpaper, Hyprland's own wallpaper program, by awww, which
-    // fades between images, or by Lantern's own lantern-paper. It shows the images it finds
+    // fades between images, or by Lantern's own lantern-paper, with hyprmural's pictures over
+    // it or without. It shows the images it finds
     // to choose from and tries them on the desktop. With hyprpaper it writes the choice to
     // hyprpaper.conf only after the user reviews the change; awww remembers it itself.
     class WallpaperPage {
@@ -105,6 +106,7 @@ namespace ui {
         // Turns a random wallpaper for each workspace on, from the wallpapers folder, or off.
         void                                                                   toggleRandom();
         void                                                                   chooseRandomFolder();
+        void                                                                   chooseMuralFolder();
         // Chooses a new random image for every workspace, and shows the active ones.
         void                                                                   shuffle();
         // In place of the chooser and the images, with random wallpapers: the folder and the fit.
@@ -164,6 +166,9 @@ namespace ui {
         std::optional<desktop::Wallpaper>                                    configRest;
         bool                                                                 luaConfig = false;
         std::optional<std::filesystem::path>                                 randomFrom;
+        // Where hyprmural takes its pictures from, and whether hyprland.lua loads it now.
+        std::filesystem::path                                                muralFolder;
+        bool                                                                 muralInConfig = false;
         Hyprutils::Memory::CSharedPointer<Hyprtoolkit::CRowLayoutElement>    workspaceRow;
         // Beside Move to trash, so that a workspace can go back to every workspace's.
         Hyprutils::Memory::CSharedPointer<Hyprtoolkit::CRowLayoutElement>    selectionActions;
