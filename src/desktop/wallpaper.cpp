@@ -591,7 +591,7 @@ namespace desktop {
     }
 
     std::vector<std::filesystem::path> muralPluginCandidates(const foundation::Environment& environment) {
-        return {"/usr/lib/hyprmural/hyprmural.so", "/usr/local/lib/hyprmural/hyprmural.so", homeOf(environment) / ".local" / "lib" / "hyprmural" / "hyprmural.so"};
+        return {homeOf(environment) / ".local" / "lib" / "hyprmural" / "hyprmural.so", "/usr/local/lib/hyprmural/hyprmural.so", "/usr/lib/hyprmural/hyprmural.so"};
     }
 
     std::optional<std::filesystem::path> muralPluginFile(const foundation::Environment& environment) {

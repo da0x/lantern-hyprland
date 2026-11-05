@@ -919,11 +919,15 @@ namespace ui {
     }
 
     void WallpaperPage::addFromFiles() {
-        const auto opened = files.chooseImage("Choose a wallpaper", [this](std::optional<std::filesystem::path> chosen) {
-            if (!chosen)
+        const auto opened = files.chooseImage("Choose a wallpaper", [this](application::FileChooser::Chosen chosen) {
+            if (!chosen) {
+                outcome = std::format("The file chooser did not open: {}.", chosen.error());
+                return showOverview();
+            }
+            if (!*chosen)
                 return;
             const auto environment = foundation::currentEnvironment();
-            const auto added       = desktop::addWallpaper(*chosen, desktop::wallpaperFolder(environment));
+            const auto added       = desktop::addWallpaper(**chosen, desktop::wallpaperFolder(environment));
             if (!added) {
                 outcome = std::format("The image was not added: {}.", added.error());
                 return showOverview();
@@ -1152,10 +1156,14 @@ namespace ui {
     }
 
     void WallpaperPage::chooseRandomFolder() {
-        const auto opened = files.chooseFolder("Choose a folder of wallpapers", [this](std::optional<std::filesystem::path> chosen) {
-            if (!chosen)
+        const auto opened = files.chooseFolder("Choose a folder of wallpapers", [this](application::FileChooser::Chosen chosen) {
+            if (!chosen) {
+                outcome = std::format("The file chooser did not open: {}.", chosen.error());
+                return showOverview();
+            }
+            if (!*chosen)
                 return;
-            randomFrom = *chosen;
+            randomFrom = **chosen;
             outcome.clear();
             showOverview();
         });
@@ -1166,10 +1174,14 @@ namespace ui {
     }
 
     void WallpaperPage::chooseMuralFolder() {
-        const auto opened = files.chooseFolder("Choose a folder of pictures", [this](std::optional<std::filesystem::path> chosen) {
-            if (!chosen)
+        const auto opened = files.chooseFolder("Choose a folder of pictures", [this](application::FileChooser::Chosen chosen) {
+            if (!chosen) {
+                outcome = std::format("The file chooser did not open: {}.", chosen.error());
+                return showOverview();
+            }
+            if (!*chosen)
                 return;
-            muralFolder = *chosen;
+            muralFolder = **chosen;
             outcome.clear();
             showOverview();
         });

@@ -42,15 +42,15 @@ namespace application {
             sd_bus_flush_close_unref(bus);
     }
 
-    std::expected<void, std::string> FileChooser::chooseImage(const std::string& title, std::function<void(std::optional<std::filesystem::path>)> done) {
+    std::expected<void, std::string> FileChooser::chooseImage(const std::string& title, std::function<void(Chosen)> done) {
         return open(title, false, std::move(done));
     }
 
-    std::expected<void, std::string> FileChooser::chooseFolder(const std::string& title, std::function<void(std::optional<std::filesystem::path>)> done) {
+    std::expected<void, std::string> FileChooser::chooseFolder(const std::string& title, std::function<void(Chosen)> done) {
         return open(title, true, std::move(done));
     }
 
-    std::expected<void, std::string> FileChooser::open(const std::string& title, bool folder, std::function<void(std::optional<std::filesystem::path>)> done) {
+    std::expected<void, std::string> FileChooser::open(const std::string& title, bool folder, std::function<void(Chosen)> done) {
         if (waiting)
             return std::unexpected{"the file chooser is already open"};
         if (bus == nullptr) {
@@ -89,7 +89,7 @@ namespace application {
                                     : sd_bus_message_append(call, "ssa{sv}", "", title.c_str(), 2, "handle_token", "s", token.c_str(), "filters", "a(sa(us))", 1, "Images", 5,
                                                             1U, "image/png", 1U, "image/jpeg", 1U, "image/webp", 1U, "image/jxl", 1U, "image/bmp");
         // NOLINTEND(cppcoreguidelines-pro-type-vararg)
-        const int sent = appended < 0 ? appended : sd_bus_call_async(bus, nullptr, call, nullptr, nullptr, 0);
+        const int sent = appended < 0 ? appended : sd_bus_call_async(bus, nullptr, call, replied, this, 0);
         sd_bus_message_unref(call);
         if (sent < 0)
             return std::unexpected{std::format("cannot open the file chooser: {}", std::strerror(-sent))}; // NOLINT(concurrency-mt-unsafe): the UI thread only
@@ -127,7 +127,15 @@ namespace application {
         return 0;
     }
 
-    void FileChooser::finish(std::optional<std::filesystem::path> chosen) {
+    // The portal answers the call itself only to say it failed, as when no backend can
+    // open a window; the choice comes later, as a Response signal.
+    int FileChooser::replied(sd_bus_message* message, void* self, sd_bus_error*) {
+        if (const auto* error = sd_bus_message_get_error(message); error != nullptr)
+            static_cast<FileChooser*>(self)->finish(std::unexpected{std::string{error->message != nullptr ? error->message : error->name}});
+        return 0;
+    }
+
+    void FileChooser::finish(Chosen chosen) {
         // Run after sd-bus is done with this message, not from inside its handler.
         auto done = std::exchange(waiting, {});
         if (done)

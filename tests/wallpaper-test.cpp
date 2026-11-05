@@ -290,9 +290,12 @@ namespace {
         const configuration::MainConfig config{.file = root / ".config/hypr/hyprland.lua", .choice = configuration::Choice::search, .safeMode = false};
         const Wallpaper                 main{"/main.png", FitMode::cover};
 
-        // Until the plugin is installed, it cannot be set up.
-        EXPECT_FALSE(desktop::wallpaperRequirement(desktop::WallpaperProgram::mural, environment).met());
-        EXPECT_FALSE(desktop::planWallpaperSetup(desktop::WallpaperProgram::mural, main, {}, "/pictures", config, environment).has_value());
+        // Until the plugin is installed, it cannot be set up. A copy installed on this
+        // machine already counts, so that is only checked without one.
+        if (!desktop::muralPluginFile(environment)) {
+            EXPECT_FALSE(desktop::wallpaperRequirement(desktop::WallpaperProgram::mural, environment).met());
+            EXPECT_FALSE(desktop::planWallpaperSetup(desktop::WallpaperProgram::mural, main, {}, "/pictures", config, environment).has_value());
+        }
 
         const auto plugin = root / ".local/lib/hyprmural/hyprmural.so";
         std::filesystem::create_directories(plugin.parent_path());
